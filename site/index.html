@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="KFC Football Club의 일정, 참가 신청, 출석 현황을 관리하는 회원 전용 웹사이트입니다."
+    />
+    <meta name="theme-color" content="#12372a" />
+    <title>KFC Football Club</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./js/config.js" defer></script>
+    <script src="./js/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문으로 바로가기</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#home" aria-label="KFC Football Club 홈">
+          <span class="brand-mark" aria-hidden="true">KFC</span>
+          <span class="brand-copy">
+            <strong>Football Club</strong>
+            <small>Member Web</small>
+          </span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="주요 메뉴">
+          <a href="#home" data-route-link="home">홈</a>
+          <a href="#schedule" data-route-link="schedule">일정</a>
+          <a href="#attendance" data-route-link="attendance">참석 현황</a>
+          <a href="#profile" data-route-link="profile">내 정보</a>
+        </nav>
+
+        <a class="header-login" href="#login">로그인</a>
+      </div>
+    </header>
+
+    <main id="main-content" tabindex="-1">
+      <section class="view home-view" data-view="home" aria-labelledby="home-title">
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <p class="eyebrow">KFC MEMBER WEB · VERSION 0.1.0</p>
+            <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
+            <p class="hero-description">
+              일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
+              관리하는 비공개 축구 모임 공간입니다.
+            </p>
+            <div class="hero-actions">
+              <a class="primary-action" href="#login">Google로 시작하기</a>
+              <a class="secondary-action" href="#schedule">화면 미리보기</a>
+            </div>
+            <div class="build-status" role="status">
+              <span class="status-dot" aria-hidden="true"></span>
+              Supabase 연결 전 기본 화면을 준비하고 있습니다.
+            </div>
+          </div>
+
+          <aside class="next-match-card" aria-label="다음 일정 미리보기">
+            <div class="card-topline">
+              <span>Next match</span>
+              <span class="status-pill">모집 예정</span>
+            </div>
+            <p class="match-date">08. 16</p>
+            <h2>주말 정기 경기</h2>
+            <dl class="match-details">
+              <div>
+                <dt>시간</dt>
+                <dd>18:00 – 20:00</dd>
+              </div>
+              <div>
+                <dt>장소</dt>
+                <dd>클럽 등록 후 공개</dd>
+              </div>
+              <div>
+                <dt>현황</dt>
+                <dd>참가 0 · 대기 0</dd>
+              </div>
+            </dl>
+            <div class="capacity-bar" aria-hidden="true"><span></span></div>
+            <p class="preview-note">로그인 후 실제 모임 일정을 확인할 수 있습니다.</p>
+          </aside>
+        </div>
+
+        <div class="feature-grid" aria-label="주요 기능">
+          <article>
+            <span class="feature-number">01</span>
+            <h2>일정과 신청</h2>
+            <p>경기 일정, 정원, 신청 마감을 확인하고 참가 여부를 응답합니다.</p>
+          </article>
+          <article>
+            <span class="feature-number">02</span>
+            <h2>투명한 대기 순번</h2>
+            <p>선착순 참가와 대기 순서를 모든 모임 회원이 함께 확인합니다.</p>
+          </article>
+          <article>
+            <span class="feature-number">03</span>
+            <h2>출석 기록</h2>
+            <p>경기별 출석 결과와 월간 참석 현황을 간결하게 확인합니다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="view content-view" data-view="schedule" aria-labelledby="schedule-title" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">SCHEDULE</p>
+          <h1 id="schedule-title">다가오는 일정</h1>
+          <p>Supabase 연결 후 실제 일정과 참가 현황이 표시됩니다.</p>
+        </div>
+        <div class="empty-state">
+          <span aria-hidden="true">24</span>
+          <h2>아직 등록된 일정이 없습니다</h2>
+          <p>클럽 가입과 일정 기능은 다음 개발 단계에서 연결합니다.</p>
+        </div>
+      </section>
+
+      <section class="view content-view" data-view="attendance" aria-labelledby="attendance-title" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">ATTENDANCE</p>
+          <h1 id="attendance-title">참석 현황</h1>
+          <p>월별 출석과 결석 기록을 회원에게 투명하게 공개합니다.</p>
+        </div>
+        <div class="metric-grid">
+          <article><strong>0</strong><span>이번 달 참석</span></article>
+          <article><strong>0</strong><span>예정 경기</span></article>
+          <article><strong>—</strong><span>출석률</span></article>
+        </div>
+      </section>
+
+      <section class="view content-view" data-view="profile" aria-labelledby="profile-title" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">MY PROFILE</p>
+          <h1 id="profile-title">내 정보</h1>
+          <p>로그인 후 공개 프로필과 클럽 정보를 관리할 수 있습니다.</p>
+        </div>
+        <div class="profile-preview">
+          <div class="avatar-placeholder" aria-hidden="true">K</div>
+          <div>
+            <span class="status-pill">로그인 필요</span>
+            <h2>회원 프로필</h2>
+            <p>Google 계정 연결은 다음 단계에서 진행합니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view login-view" data-view="login" aria-labelledby="login-title" hidden>
+        <div class="login-card">
+          <a class="back-link" href="#home">← 홈으로</a>
+          <p class="eyebrow">MEMBER ACCESS</p>
+          <h1 id="login-title">다시 경기장으로.</h1>
+          <p>
+            첫 버전은 Google 로그인으로 시작합니다. 카카오 로그인은 핵심 기능이
+            안정된 뒤 추가합니다.
+          </p>
+          <button class="google-button" type="button" data-google-login>
+            <span aria-hidden="true">G</span>
+            Google로 계속하기
+          </button>
+          <p class="login-notice">
+            현재는 화면 기반 단계입니다. Supabase 연결 후 로그인이 활성화됩니다.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="모바일 주요 메뉴">
+      <a href="#home" data-route-link="home"><span aria-hidden="true">⌂</span>홈</a>
+      <a href="#schedule" data-route-link="schedule"><span aria-hidden="true">□</span>일정</a>
+      <a href="#attendance" data-route-link="attendance"><span aria-hidden="true">✓</span>참석</a>
+      <a href="#profile" data-route-link="profile"><span aria-hidden="true">○</span>내 정보</a>
+    </nav>
+
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+  </body>
+</html>
