@@ -27,6 +27,18 @@
   const profileFormStatus = document.querySelector('[data-profile-form-status]');
   const profileBioInput = document.querySelector('[data-profile-bio-input]');
   const profileBioCount = document.querySelector('[data-profile-bio-count]');
+  const clubLoading = document.querySelector('[data-club-loading]');
+  const clubOnboarding = document.querySelector('[data-club-onboarding]');
+  const clubDashboard = document.querySelector('[data-club-dashboard]');
+  const clubTabButtons = Array.from(document.querySelectorAll('[data-club-tab]'));
+  const createClubForm = document.querySelector('[data-create-club-form]');
+  const joinClubForm = document.querySelector('[data-join-club-form]');
+  const generatedInviteCodeInput = document.querySelector('[data-generated-invite-code]');
+  const createClubStatus = document.querySelector('[data-create-club-status]');
+  const joinClubStatus = document.querySelector('[data-join-club-status]');
+  const createClubSubmit = document.querySelector('[data-create-club-submit]');
+  const joinClubSubmit = document.querySelector('[data-join-club-submit]');
+  const rotateInviteButton = document.querySelector('[data-rotate-invite-code]');
   const config = window.KFC_CONFIG;
   let authReady = false;
   let session = null;
@@ -35,6 +47,7 @@
   let selectedAvatarBlob = null;
   let selectedAvatarPreviewUrl = '';
   let useDefaultAvatar = false;
+  let activeClub = null;
   let toastTimer;
 
   const hasSupabaseConfig = Boolean(
@@ -432,6 +445,243 @@
     }
   }
 
+  function roleLabel(role) {
+    return { owner: '총관리자', admin: '관리자', member: '회원' }[role] || '회원';
+  }
+
+  function generateInviteCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const values = new Uint8Array(10);
+    window.crypto.getRandomValues(values);
+    return Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
+  }
+
+  function refreshGeneratedInviteCode() {
+    generatedInviteCodeInput.value = generateInviteCode();
+    createClubStatus.textContent = '';
+    createClubStatus.classList.remove('is-error');
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const fallback = document.createElement('textarea');
+        fallback.value = text;
+        fallback.className = 'visually-hidden';
+        document.body.append(fallback);
+        fallback.select();
+        document.execCommand('copy');
+        fallback.remove();
+      }
+      showToast('초대 코드를 복사했습니다.');
+    } catch {
+      showToast('복사하지 못했습니다. 코드를 직접 선택해 주세요.');
+    }
+  }
+
+  function setClubTab(tabName, moveFocus = false) {
+    const isCreate = tabName === 'create';
+    clubTabButtons.forEach((button) => {
+      const selected = button.dataset.clubTab === tabName;
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    createClubForm.hidden = !isCreate;
+    joinClubForm.hidden = isCreate;
+    const targetForm = isCreate ? createClubForm : joinClubForm;
+    if (moveFocus) targetForm.querySelector('input:not([readonly])')?.focus();
+  }
+
+  function resetClub() {
+    activeClub = null;
+    clubLoading.hidden = false;
+    clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
+    clubOnboarding.hidden = true;
+    clubDashboard.hidden = true;
+    document.querySelector('[data-member-directory]').replaceChildren();
+    document.querySelector('[data-new-invite-card]').hidden = true;
+  }
+
+  function showClubOnboarding() {
+    activeClub = null;
+    clubLoading.hidden = true;
+    clubDashboard.hidden = true;
+    clubOnboarding.hidden = false;
+    setClubTab('create');
+    if (!generatedInviteCodeInput.value) refreshGeneratedInviteCode();
+  }
+
+  function createMemberCard(member, avatarUrl) {
+    const card = document.createElement('article');
+    card.className = 'member-card';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar-placeholder member-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    setAvatar(avatar, avatarUrl, member.display_name);
+
+    const copy = document.createElement('div');
+    const name = document.createElement('h3');
+    name.textContent = member.display_name;
+    const details = document.createElement('p');
+    const profileDetails = [
+      Number.isInteger(member.age) ? `${member.age}세` : null,
+      member.preferred_position,
+    ].filter(Boolean);
+    details.textContent = profileDetails.join(' · ') || '프로필 정보 없음';
+    const role = document.createElement('span');
+    role.className = 'member-role';
+    role.textContent = roleLabel(member.role);
+    copy.append(name, details, role);
+    card.append(avatar, copy);
+    return card;
+  }
+
+  async function loadClubMembers(clubId) {
+    const directory = document.querySelector('[data-member-directory]');
+    directory.replaceChildren();
+    const { data, error } = await supabaseClient
+      .from('club_member_profiles')
+      .select(
+        'club_id, user_id, role, status, joined_at, display_name, age, avatar_url, avatar_path, use_default_avatar, preferred_position, preferred_foot, shirt_number, bio',
+      )
+      .eq('club_id', clubId)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: true });
+    if (error) throw error;
+
+    const membersWithAvatars = await Promise.all(
+      data.map(async (member) => ({
+        member,
+        avatarUrl: await resolveAvatarUrl(member),
+      })),
+    );
+    membersWithAvatars.forEach(({ member, avatarUrl }) => {
+      directory.append(createMemberCard(member, avatarUrl));
+    });
+    document.querySelector('[data-club-member-count]').textContent = data.length;
+  }
+
+  async function showClubDashboard(membership, createdInviteCode = '') {
+    activeClub = membership;
+    clubLoading.hidden = true;
+    clubOnboarding.hidden = true;
+    clubDashboard.hidden = false;
+    document.querySelector('[data-club-name]').textContent = membership.clubs.name;
+    document.querySelector('[data-club-role]').textContent = roleLabel(membership.role);
+    document.querySelector('[data-owner-invite-tools]').hidden = membership.role !== 'owner';
+
+    const inviteCard = document.querySelector('[data-new-invite-card]');
+    inviteCard.hidden = !createdInviteCode;
+    if (createdInviteCode) {
+      document.querySelector('[data-new-invite-code]').textContent = createdInviteCode;
+    }
+
+    try {
+      await loadClubMembers(membership.club_id);
+    } catch (error) {
+      document.querySelector('[data-member-directory]').textContent =
+        '회원 명단을 불러오지 못했습니다.';
+      showToast(`회원 명단 오류: ${error.message}`);
+    }
+  }
+
+  async function loadClub(user, createdInviteCode = '') {
+    resetClub();
+    const { data, error } = await supabaseClient
+      .from('club_members')
+      .select('club_id, role, status, clubs!inner(id, name, owner_id, time_zone, status)')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (error) {
+      clubLoading.lastChild.textContent = ' 클럽 정보를 불러오지 못했습니다.';
+      showToast(`클럽 정보 오류: ${error.message}`);
+      return;
+    }
+    if (!data) {
+      showClubOnboarding();
+      return;
+    }
+    await showClubDashboard(data, createdInviteCode);
+  }
+
+  async function rotateInviteCode() {
+    if (!session?.user || !activeClub || activeClub.role !== 'owner') return;
+    const confirmed = window.confirm(
+      '새 초대 코드를 발급하면 기존 코드는 즉시 사용할 수 없습니다. 계속할까요?',
+    );
+    if (!confirmed) return;
+
+    const inviteCode = generateInviteCode();
+    rotateInviteButton.disabled = true;
+    const { error } = await supabaseClient.rpc('rotate_club_invite_code', {
+      p_club_id: activeClub.club_id,
+      p_invite_code: inviteCode,
+    });
+    rotateInviteButton.disabled = false;
+    if (error) {
+      showToast(`새 코드를 발급하지 못했습니다: ${error.message}`);
+      return;
+    }
+
+    document.querySelector('[data-new-invite-code]').textContent = inviteCode;
+    document.querySelector('[data-new-invite-card]').hidden = false;
+    showToast('새 초대 코드를 발급했습니다.');
+  }
+
+  function setClubFormStatus(element, message, isError = false) {
+    element.textContent = message;
+    element.classList.toggle('is-error', isError);
+  }
+
+  async function createClub(event) {
+    event.preventDefault();
+    if (!session?.user || !createClubForm.reportValidity()) return;
+    const clubName = createClubForm.elements.clubName.value.trim();
+    const inviteCode = generatedInviteCodeInput.value;
+    createClubSubmit.disabled = true;
+    setClubFormStatus(createClubStatus, '클럽과 초대 코드를 안전하게 만들고 있습니다.');
+
+    const { error } = await supabaseClient.rpc('create_club_with_invite_code', {
+      p_name: clubName,
+      p_invite_code: inviteCode,
+    });
+    createClubSubmit.disabled = false;
+    if (error) {
+      setClubFormStatus(createClubStatus, error.message, true);
+      return;
+    }
+
+    createClubForm.reset();
+    refreshGeneratedInviteCode();
+    await loadClub(session.user, inviteCode);
+    showToast('클럽을 만들었습니다.');
+  }
+
+  async function joinClub(event) {
+    event.preventDefault();
+    if (!session?.user || !joinClubForm.reportValidity()) return;
+    const inviteCode = joinClubForm.elements.inviteCode.value.trim().toUpperCase();
+    joinClubSubmit.disabled = true;
+    setClubFormStatus(joinClubStatus, '초대 코드를 확인하고 있습니다.');
+
+    const { error } = await supabaseClient.rpc('join_club_with_invite_code', {
+      p_invite_code: inviteCode,
+    });
+    joinClubSubmit.disabled = false;
+    if (error) {
+      setClubFormStatus(joinClubStatus, error.message, true);
+      return;
+    }
+
+    joinClubForm.reset();
+    await loadClub(session.user);
+    showToast('클럽에 가입했습니다.');
+  }
+
   async function handleAuthSession(nextSession) {
     session = nextSession;
     authReady = true;
@@ -444,9 +694,11 @@
       }
       setConnectionState('ready', `${session.user.email || '회원'} 계정으로 로그인했습니다.`);
       await loadProfile(session.user);
+      await loadClub(session.user);
     } else {
       window.sessionStorage.removeItem('kfc-oauth-pending');
       resetProfile();
+      resetClub();
       setConnectionState('ready', 'Supabase가 연결되었습니다. Google 로그인을 사용할 수 있습니다.');
     }
 
@@ -492,7 +744,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.3.0';
+    element.textContent = config?.appVersion || '0.4.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -510,7 +762,33 @@
       setAvatar(document.querySelector('[data-edit-avatar]'), '', profileForm.elements.displayName.value);
     }
   });
+  clubTabButtons.forEach((button, index) => {
+    button.addEventListener('click', () => setClubTab(button.dataset.clubTab, true));
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      const nextButton = clubTabButtons[(index + direction + clubTabButtons.length) % clubTabButtons.length];
+      setClubTab(nextButton.dataset.clubTab);
+      nextButton.focus();
+    });
+  });
+  createClubForm?.addEventListener('submit', createClub);
+  joinClubForm?.addEventListener('submit', joinClub);
+  document.querySelector('[data-regenerate-invite-code]')?.addEventListener('click', refreshGeneratedInviteCode);
+  document.querySelector('[data-copy-generated-code]')?.addEventListener('click', () => {
+    copyText(generatedInviteCodeInput.value);
+  });
+  document.querySelector('[data-copy-new-invite]')?.addEventListener('click', () => {
+    copyText(document.querySelector('[data-new-invite-code]').textContent);
+  });
+  rotateInviteButton?.addEventListener('click', rotateInviteCode);
+  joinClubForm?.elements.inviteCode?.addEventListener('input', (event) => {
+    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  });
   window.addEventListener('hashchange', renderRoute);
+
+  refreshGeneratedInviteCode();
 
   if (!window.location.hash) {
     window.history.replaceState(null, '', '#home');

@@ -114,3 +114,69 @@ test('프로필 Storage 마이그레이션은 크기, MIME, 경로와 소유권�
   assert.match(migration, /for update\s+to authenticated/);
   assert.match(migration, /for delete\s+to authenticated/);
 });
+
+test('클럽 화면은 생성과 코드 가입을 분리하고 키보드 탭 구조를 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-view="club"/);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /data-create-club-form/);
+  assert.match(html, /data-join-club-form/);
+  assert.match(html, /name="clubName"[^>]+required[^>]+minlength="2"[^>]+maxlength="50"/);
+  assert.match(html, /name="inviteCode"[^>]+minlength="10"[^>]+maxlength="10"/);
+  assert.match(html, /data-member-directory/);
+});
+
+test('클럽 클라이언트는 난수 코드를 만들고 서버 함수로만 생성과 가입을 요청한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /crypto\.getRandomValues/);
+  assert.match(script, /create_club_with_invite_code/);
+  assert.match(script, /join_club_with_invite_code/);
+  assert.match(script, /\.from\('club_member_profiles'\)/);
+  assert.doesNotMatch(script, /\.from\('club_invites'\)/);
+  assert.doesNotMatch(script, /\.from\('clubs'\)\.insert/);
+  assert.doesNotMatch(script, /\.from\('club_members'\)\.insert/);
+});
+
+test('클럽 마이그레이션은 RLS, 단일 활성 클럽과 bcrypt 초대 코드를 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040003_create_clubs_and_invites.sql',
+  );
+  const inviteTable = migration.match(
+    /create table if not exists public\.club_invites \(([\s\S]*?)\n\);/,
+  )?.[1];
+
+  assert.ok(inviteTable);
+  assert.match(inviteTable, /code_hash text not null/);
+  assert.doesNotMatch(inviteTable, /\n\s*code text/);
+  assert.match(migration, /where status = 'active'/);
+  assert.match(migration, /alter table public\.clubs enable row level security/);
+  assert.match(migration, /alter table public\.club_members enable row level security/);
+  assert.match(migration, /alter table public\.club_invites enable row level security/);
+  assert.match(migration, /revoke all on table public\.club_invites from anon, authenticated/);
+  assert.match(migration, /extensions\.crypt\(v_code, extensions\.gen_salt\('bf', 10\)\)/);
+  assert.match(migration, /ci\.code_hash = extensions\.crypt\(v_code, ci\.code_hash\)/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /grant execute on function public\.create_club_with_invite_code/);
+  assert.match(migration, /grant execute on function public\.join_club_with_invite_code/);
+});
+
+test('총관리자만 기존 코드를 무효화하고 새 초대 코드를 발급할 수 있다', async () => {
+  const [html, script, migration] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/app.js'),
+    readProjectFile('supabase/migrations/202608040004_add_invite_code_rotation.sql'),
+  ]);
+
+  assert.match(html, /data-owner-invite-tools/);
+  assert.match(html, /data-rotate-invite-code/);
+  assert.match(script, /activeClub\.role !== 'owner'/);
+  assert.match(script, /rotate_club_invite_code/);
+  assert.match(migration, /cm\.role = 'owner'/);
+  assert.match(migration, /c\.owner_id = v_user_id/);
+  assert.match(migration, /code_hash = extensions\.crypt\(v_code, extensions\.gen_salt\('bf', 10\)\)/);
+  assert.match(migration, /revoke all on function public\.rotate_club_invite_code/);
+  assert.match(migration, /grant execute on function public\.rotate_club_invite_code\(uuid, text\) to authenticated/);
+});

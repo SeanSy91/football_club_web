@@ -29,6 +29,7 @@
 
         <nav class="desktop-nav" aria-label="주요 메뉴">
           <a href="#home" data-route-link="home">홈</a>
+          <a href="#club" data-route-link="club">클럽</a>
           <a href="#schedule" data-route-link="schedule">일정</a>
           <a href="#attendance" data-route-link="attendance">참석 현황</a>
           <a href="#profile" data-route-link="profile">내 정보</a>
@@ -42,7 +43,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.3.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.4.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -100,6 +101,107 @@
             <h2>출석 기록</h2>
             <p>경기별 출석 결과와 월간 참석 현황을 간결하게 확인합니다.</p>
           </article>
+        </div>
+      </section>
+
+      <section class="view content-view" data-view="club" aria-labelledby="club-title" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">MY CLUB</p>
+          <h1 id="club-title">우리 클럽</h1>
+          <p>새 클럽을 만들거나 전달받은 초대 코드로 바로 가입할 수 있습니다.</p>
+        </div>
+
+        <div class="club-loading" data-club-loading>
+          <span class="status-dot" aria-hidden="true"></span>
+          클럽 정보를 확인하고 있습니다.
+        </div>
+
+        <div class="club-onboarding" data-club-onboarding hidden>
+          <div class="club-choice" role="tablist" aria-label="클럽 시작 방법">
+            <button type="button" role="tab" aria-selected="true" aria-controls="create-club-panel" data-club-tab="create">
+              <strong>새 클럽 만들기</strong>
+              <span>내가 총관리자로 시작합니다.</span>
+            </button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="join-club-panel" data-club-tab="join">
+              <strong>초대 코드로 가입</strong>
+              <span>승인 없이 바로 회원이 됩니다.</span>
+            </button>
+          </div>
+
+          <form id="create-club-panel" class="club-form" role="tabpanel" data-create-club-form>
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">CREATE CLUB</p>
+                <h2>새 클럽 만들기</h2>
+              </div>
+            </div>
+            <label class="form-field">
+              <span>클럽 이름 *</span>
+              <input name="clubName" type="text" required minlength="2" maxlength="50" autocomplete="organization" placeholder="예: KFC Football Club" />
+            </label>
+            <div class="invite-code-field">
+              <label for="generated-invite-code">고정 초대 코드</label>
+              <div>
+                <input id="generated-invite-code" type="text" readonly data-generated-invite-code aria-describedby="invite-code-help" />
+                <button type="button" data-regenerate-invite-code>새 코드</button>
+                <button type="button" data-copy-generated-code>복사</button>
+              </div>
+              <p id="invite-code-help">코드 원문은 서버에 저장되지 않습니다. 생성 후 회원에게 안전하게 전달하세요.</p>
+            </div>
+            <p class="form-status" role="status" aria-live="polite" data-create-club-status></p>
+            <button class="save-button" type="submit" data-create-club-submit>클럽 만들기</button>
+          </form>
+
+          <form id="join-club-panel" class="club-form" role="tabpanel" data-join-club-form hidden>
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">JOIN CLUB</p>
+                <h2>초대 코드 입력</h2>
+              </div>
+            </div>
+            <label class="form-field">
+              <span>10자리 초대 코드 *</span>
+              <input name="inviteCode" class="code-input" type="text" required minlength="10" maxlength="10" pattern="[A-Za-z0-9]{10}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD234567" />
+            </label>
+            <p class="form-status" role="status" aria-live="polite" data-join-club-status></p>
+            <button class="save-button" type="submit" data-join-club-submit>클럽 가입하기</button>
+          </form>
+        </div>
+
+        <div class="club-dashboard" data-club-dashboard hidden>
+          <article class="club-identity-card">
+            <div>
+              <span class="status-pill" data-club-role>회원</span>
+              <h2 data-club-name>KFC Football Club</h2>
+              <p>Asia/Seoul · 활성 클럽</p>
+            </div>
+            <div class="member-count"><strong data-club-member-count>0</strong><span>members</span></div>
+          </article>
+
+          <aside class="new-invite-card" data-new-invite-card hidden>
+            <div>
+              <span>클럽 생성 완료</span>
+              <strong data-new-invite-code>—</strong>
+              <p>이 코드는 지금만 표시됩니다. 가입할 회원에게 전달해 주세요.</p>
+            </div>
+            <button type="button" data-copy-new-invite>초대 코드 복사</button>
+          </aside>
+
+          <aside class="invite-management-card" data-owner-invite-tools hidden>
+            <div>
+              <strong>초대 코드 관리</strong>
+              <p>기존 코드는 보안상 다시 조회할 수 없습니다. 새 코드를 발급하면 이전 코드는 즉시 무효화됩니다.</p>
+            </div>
+            <button type="button" data-rotate-invite-code>새 초대 코드 발급</button>
+          </aside>
+
+          <div class="member-section-heading">
+            <div>
+              <p class="eyebrow">MEMBERS</p>
+              <h2>함께하는 회원</h2>
+            </div>
+          </div>
+          <div class="member-directory" data-member-directory></div>
         </div>
       </section>
 
@@ -246,6 +348,7 @@
 
     <nav class="mobile-nav" aria-label="모바일 주요 메뉴">
       <a href="#home" data-route-link="home"><span aria-hidden="true">⌂</span>홈</a>
+      <a href="#club" data-route-link="club"><span aria-hidden="true">◇</span>클럽</a>
       <a href="#schedule" data-route-link="schedule"><span aria-hidden="true">□</span>일정</a>
       <a href="#attendance" data-route-link="attendance"><span aria-hidden="true">✓</span>참석</a>
       <a href="#profile" data-route-link="profile"><span aria-hidden="true">○</span>내 정보</a>
