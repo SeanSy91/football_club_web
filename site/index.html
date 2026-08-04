@@ -42,7 +42,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.2.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.3.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -133,15 +133,94 @@
         <div class="section-heading">
           <p class="eyebrow">MY PROFILE</p>
           <h1 id="profile-title">내 정보</h1>
-          <p>로그인 후 공개 프로필과 클럽 정보를 관리할 수 있습니다.</p>
+          <p>모임에서 사용할 공개 프로필을 작성하고 관리합니다. 로그인 이메일은 다른 회원에게 공개하지 않습니다.</p>
         </div>
-        <div class="profile-preview" data-profile-card>
-          <div class="avatar-placeholder" aria-hidden="true" data-profile-avatar>K</div>
-          <div>
-            <span class="status-pill" data-profile-status>로그인 확인 중</span>
-            <h2 data-profile-name>회원 프로필</h2>
-            <p data-profile-email>Google 계정으로 로그인하면 본인 정보가 표시됩니다.</p>
-          </div>
+
+        <div class="profile-workspace">
+          <article class="profile-preview" data-profile-card>
+            <div class="avatar-placeholder" aria-hidden="true" data-profile-avatar>K</div>
+            <div class="profile-summary-copy">
+              <span class="status-pill" data-profile-status>로그인 확인 중</span>
+              <h2 data-profile-name>회원 프로필</h2>
+              <p data-profile-email>Google 계정으로 로그인하면 본인 정보가 표시됩니다.</p>
+              <dl class="profile-details">
+                <div><dt>나이</dt><dd data-profile-age>—</dd></div>
+                <div><dt>선호 포지션</dt><dd data-profile-position>—</dd></div>
+                <div><dt>주 사용 발</dt><dd data-profile-foot>—</dd></div>
+                <div><dt>등번호</dt><dd data-profile-number>—</dd></div>
+              </dl>
+              <p class="profile-bio" data-profile-bio>자기소개를 등록해 보세요.</p>
+              <button class="secondary-button" type="button" data-profile-edit disabled>프로필 수정</button>
+            </div>
+          </article>
+
+          <form class="profile-form" data-profile-form hidden>
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">EDIT PROFILE</p>
+                <h2>프로필 작성</h2>
+              </div>
+              <span>필수 항목 *</span>
+            </div>
+
+            <fieldset class="photo-fieldset">
+              <legend>프로필 사진</legend>
+              <div class="photo-editor">
+                <div class="avatar-placeholder avatar-editor-preview" aria-hidden="true" data-edit-avatar>K</div>
+                <div>
+                  <input
+                    id="profile-photo"
+                    class="visually-hidden"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    data-profile-photo
+                  />
+                  <label class="file-button" for="profile-photo">사진 선택</label>
+                  <button class="text-button" type="button" data-profile-photo-remove>기본 이미지 사용</button>
+                  <p>JPG, PNG 또는 WebP · 선택한 사진은 512×512 WebP로 압축됩니다.</p>
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>이름 또는 닉네임 *</span>
+                <input name="displayName" type="text" required minlength="1" maxlength="30" autocomplete="nickname" />
+              </label>
+              <label class="form-field">
+                <span>나이 *</span>
+                <input name="age" type="number" required min="1" max="120" inputmode="numeric" />
+              </label>
+              <label class="form-field">
+                <span>등번호</span>
+                <input name="shirtNumber" type="number" min="0" max="99" inputmode="numeric" placeholder="0–99" />
+              </label>
+              <label class="form-field">
+                <span>선호 포지션</span>
+                <input name="preferredPosition" type="text" maxlength="30" placeholder="예: 미드필더" />
+              </label>
+              <label class="form-field">
+                <span>주 사용 발</span>
+                <select name="preferredFoot">
+                  <option value="">선택 안 함</option>
+                  <option value="right">오른발</option>
+                  <option value="left">왼발</option>
+                  <option value="both">양발</option>
+                </select>
+              </label>
+              <label class="form-field form-field-wide">
+                <span>자기소개</span>
+                <textarea name="bio" rows="4" maxlength="300" placeholder="모임 회원들에게 간단히 소개해 주세요." data-profile-bio-input></textarea>
+                <small><span data-profile-bio-count>0</span>/300</small>
+              </label>
+            </div>
+
+            <p class="form-status" role="status" aria-live="polite" data-profile-form-status></p>
+            <div class="form-actions">
+              <button class="secondary-button" type="button" data-profile-cancel>취소</button>
+              <button class="save-button" type="submit" data-profile-save>저장하기</button>
+            </div>
+          </form>
         </div>
       </section>
 

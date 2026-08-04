@@ -74,3 +74,43 @@ test('profiles 마이그레이션은 RLS와 본인 전용 정책을 설정한다
   assert.match(migration, /after insert on auth\.users/);
   assert.doesNotMatch(migration, /to anon/);
 });
+
+test('프로필 입력 화면은 필수값, 선택값과 접근 가능한 사진 입력을 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-profile-form/);
+  assert.match(html, /name="displayName"[^>]+required/);
+  assert.match(html, /name="age"[^>]+required[^>]+min="1"[^>]+max="120"/);
+  assert.match(html, /name="shirtNumber"[^>]+min="0"[^>]+max="99"/);
+  assert.match(html, /for="profile-photo"/);
+  assert.match(html, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(html, /aria-live="polite" data-profile-form-status/);
+});
+
+test('프로필 사진은 브라우저에서 압축한 WebP만 비공개 저장소에 업로드한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /PROFILE_IMAGE_SIZE = 512/);
+  assert.match(script, /MAX_PROFILE_IMAGE_BYTES = 1024 \* 1024/);
+  assert.match(script, /canvas\.toBlob/);
+  assert.match(script, /'image\/webp'/);
+  assert.match(script, /\.from\(PROFILE_BUCKET\)/);
+  assert.match(script, /\.upload\(avatarPath, selectedAvatarBlob/);
+  assert.match(script, /createSignedUrl/);
+});
+
+test('프로필 Storage 마이그레이션은 크기, MIME, 경로와 소유권을 제한한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040002_add_profile_details_and_storage.sql',
+  );
+
+  assert.match(migration, /'profile-images'/);
+  assert.match(migration, /public,\s+file_size_limit,\s+allowed_mime_types/);
+  assert.match(migration, /1048576/);
+  assert.match(migration, /array\['image\/webp'\]/);
+  assert.match(migration, /auth\.uid\(\)\)::text \|\| '\/avatar\.webp'/);
+  assert.match(migration, /owner_id = \(select auth\.uid\(\)\)::text/);
+  assert.match(migration, /for insert\s+to authenticated\s+with check/);
+  assert.match(migration, /for update\s+to authenticated/);
+  assert.match(migration, /for delete\s+to authenticated/);
+});

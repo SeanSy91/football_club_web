@@ -39,3 +39,18 @@ Client Secret은 Supabase Dashboard에만 입력한다. 저장소, 정적 웹 �
 2. Google 계정을 선택한 뒤 `#profile` 화면으로 돌아오는지 확인한다.
 3. 이름, 이메일과 Google 프로필 사진이 본인 계정 정보로 표시되는지 확인한다.
 4. **로그아웃** 후 보호 화면에 다시 접근하면 로그인 화면으로 이동하는지 확인한다.
+
+## 5. 프로필과 비공개 사진 저장소
+
+`v0.3.0`을 적용할 때 SQL Editor에서
+`supabase/migrations/202608040002_add_profile_details_and_storage.sql`을 실행한다.
+
+이 마이그레이션은 다음 항목을 함께 설정한다.
+
+- 나이와 선택 프로필 필드
+- 본인만 수정 가능한 컬럼 권한
+- 1MB WebP만 받는 비공개 `profile-images` bucket
+- 사용자별 고정 경로 `<user-id>/avatar.webp`
+- 본인이 소유한 사진만 조회·업로드·교체·삭제할 수 있는 Storage RLS
+
+사진 원본은 웹 브라우저에서 512×512 WebP로 압축한 뒤 업로드한다. 데이터베이스에는 만료되는 서명 URL이 아니라 파일 경로만 저장한다.
