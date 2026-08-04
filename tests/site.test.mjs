@@ -180,3 +180,54 @@ test('총관리자만 기존 코드를 무효화하고 새 초대 코드를 발�
   assert.match(migration, /revoke all on function public\.rotate_club_invite_code/);
   assert.match(migration, /grant execute on function public\.rotate_club_invite_code\(uuid, text\) to authenticated/);
 });
+
+test('총관리자는 회원 권한과 탈퇴를 관리하고 감사 로그를 확인할 수 있다', async () => {
+  const [html, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-owner-audit/);
+  assert.match(html, /data-audit-list/);
+  assert.match(script, /activeClub\?\.role === 'owner' && member\.role !== 'owner'/);
+  assert.match(script, /change_member_role/);
+  assert.match(script, /remove_club_member/);
+  assert.match(script, /\.from\('audit_logs'\)/);
+  assert.match(script, /membership\.role !== 'owner'/);
+});
+
+test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 기록을 서버에서 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040005_add_member_management_and_audit.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.audit_logs/);
+  assert.match(migration, /alter table public\.audit_logs enable row level security/);
+  assert.match(migration, /revoke all on table public\.audit_logs from anon, authenticated/);
+  assert.match(migration, /create policy "audit_logs_select_owner"/);
+  assert.match(migration, /private\.is_club_owner\(p_club_id, v_actor_user_id\)/);
+  assert.match(migration, /p_new_role not in \('admin', 'member'\)/);
+  assert.match(migration, /v_previous_role = 'owner'/);
+  assert.match(migration, /'member_promoted'/);
+  assert.match(migration, /'admin_revoked'/);
+  assert.match(migration, /'member_removed'/);
+  assert.match(migration, /'invite_code_rotated'/);
+  assert.match(migration, /'member_joined'/);
+  assert.match(migration, /on conflict \(club_id, user_id\) do update/);
+  assert.match(migration, /where public\.club_members\.status = 'removed'/);
+  assert.match(migration, /grant execute on function public\.change_member_role\(uuid, uuid, text\) to authenticated/);
+  assert.match(migration, /grant execute on function public\.remove_club_member\(uuid, uuid\) to authenticated/);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
+});
+
+test('v0.5.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+  const [html, config, readme] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/config.js'),
+    readProjectFile('README.md'),
+  ]);
+
+  assert.match(html, /data-app-version>0\.5\.0</);
+  assert.match(config, /appVersion: '0\.5\.0'/);
+  assert.match(readme, /`0\.5\.0`/);
+});

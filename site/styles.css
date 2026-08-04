@@ -745,6 +745,88 @@ button {
   border-radius: 999px;
 }
 
+.member-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.member-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.member-actions button[data-remove-member] {
+  color: #9b3528;
+}
+
+.member-actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.audit-section {
+  margin-top: 44px;
+}
+
+.audit-section .member-section-heading > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.audit-list {
+  display: grid;
+  gap: 1px;
+  margin: 18px 0 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+}
+
+.audit-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 24px;
+  padding: 18px 20px;
+  background: var(--paper);
+}
+
+.audit-list strong {
+  font-size: 13px;
+}
+
+.audit-list p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.audit-list time {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.audit-empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .section-heading {
   max-width: 720px;
 }
@@ -1395,6 +1477,14 @@ button {
 
   .invite-code-field input {
     grid-column: 1 / -1;
+  }
+
+  .audit-list li {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-list p {
+    grid-column: auto;
   }
 }
 

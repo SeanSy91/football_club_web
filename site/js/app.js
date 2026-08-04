@@ -502,6 +502,8 @@
     clubDashboard.hidden = true;
     document.querySelector('[data-member-directory]').replaceChildren();
     document.querySelector('[data-new-invite-card]').hidden = true;
+    document.querySelector('[data-owner-audit]').hidden = true;
+    document.querySelector('[data-audit-list]').replaceChildren();
   }
 
   function showClubOnboarding() {
@@ -535,7 +537,141 @@
     role.textContent = roleLabel(member.role);
     copy.append(name, details, role);
     card.append(avatar, copy);
+
+    if (activeClub?.role === 'owner' && member.role !== 'owner') {
+      const actions = document.createElement('div');
+      actions.className = 'member-actions';
+      const roleButton = document.createElement('button');
+      roleButton.type = 'button';
+      roleButton.dataset.changeMemberRole = member.user_id;
+      roleButton.textContent = member.role === 'admin' ? '관리자 해제' : '관리자로 지정';
+      roleButton.addEventListener('click', () => changeMemberRole(member, actions));
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.dataset.removeMember = member.user_id;
+      removeButton.textContent = '회원 탈퇴 처리';
+      removeButton.addEventListener('click', () => removeMember(member, actions));
+      actions.append(roleButton, removeButton);
+      card.append(actions);
+    }
     return card;
+  }
+
+  function setMemberActionsDisabled(actions, disabled) {
+    actions.querySelectorAll('button').forEach((button) => {
+      button.disabled = disabled;
+    });
+  }
+
+  async function changeMemberRole(member, actions) {
+    if (!activeClub || activeClub.role !== 'owner') return;
+    const nextRole = member.role === 'admin' ? 'member' : 'admin';
+    const actionLabel = nextRole === 'admin' ? '관리자로 지정' : '관리자에서 해제';
+    if (!window.confirm(`${member.display_name}님을 ${actionLabel}할까요?`)) return;
+
+    setMemberActionsDisabled(actions, true);
+    const { error } = await supabaseClient.rpc('change_member_role', {
+      p_club_id: activeClub.club_id,
+      p_target_user_id: member.user_id,
+      p_new_role: nextRole,
+    });
+    if (error) {
+      setMemberActionsDisabled(actions, false);
+      showToast(`권한을 변경하지 못했습니다: ${error.message}`);
+      return;
+    }
+    await loadClub(session.user);
+    showToast(`${member.display_name}님의 권한을 변경했습니다.`);
+  }
+
+  async function removeMember(member, actions) {
+    if (!activeClub || activeClub.role !== 'owner') return;
+    if (!window.confirm(`${member.display_name}님을 클럽에서 탈퇴 처리할까요?`)) return;
+
+    setMemberActionsDisabled(actions, true);
+    const { error } = await supabaseClient.rpc('remove_club_member', {
+      p_club_id: activeClub.club_id,
+      p_target_user_id: member.user_id,
+    });
+    if (error) {
+      setMemberActionsDisabled(actions, false);
+      showToast(`회원 탈퇴 처리에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await loadClub(session.user);
+    showToast(`${member.display_name}님을 탈퇴 처리했습니다.`);
+  }
+
+  function auditActionLabel(action) {
+    return {
+      member_promoted: '관리자 지정',
+      admin_revoked: '관리자 해제',
+      member_removed: '회원 탈퇴 처리',
+      invite_code_rotated: '초대 코드 재발급',
+      member_joined: '회원 가입',
+    }[action] || '관리 작업';
+  }
+
+  function auditDescription(entry) {
+    if (entry.action === 'member_promoted') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name}님을 관리자로 지정했습니다.`;
+    }
+    if (entry.action === 'admin_revoked') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name}님의 관리자 권한을 해제했습니다.`;
+    }
+    if (entry.action === 'member_removed') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name}님을 탈퇴 처리했습니다.`;
+    }
+    if (entry.action === 'invite_code_rotated') {
+      return `${entry.actor_display_name}님이 초대 코드를 새로 발급했습니다.`;
+    }
+    if (entry.action === 'member_joined') {
+      return `${entry.target_display_name}님이 초대 코드로 가입했습니다.`;
+    }
+    return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
+  }
+
+  async function loadAuditLogs(clubId) {
+    const list = document.querySelector('[data-audit-list]');
+    list.replaceChildren();
+    const { data, error } = await supabaseClient
+      .from('audit_logs')
+      .select(
+        'id, actor_display_name, action, target_type, target_id, target_display_name, before_state, after_state, created_at',
+      )
+      .eq('club_id', clubId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+
+    if (!data.length) {
+      const empty = document.createElement('li');
+      empty.className = 'audit-empty';
+      empty.textContent = '아직 기록된 관리 작업이 없습니다.';
+      list.append(empty);
+      return;
+    }
+
+    const dateFormatter = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    data.forEach((entry) => {
+      const item = document.createElement('li');
+      const title = document.createElement('strong');
+      title.textContent = auditActionLabel(entry.action);
+      const time = document.createElement('time');
+      time.dateTime = entry.created_at;
+      time.textContent = dateFormatter.format(new Date(entry.created_at));
+      const description = document.createElement('p');
+      description.textContent = auditDescription(entry);
+      item.append(title, time, description);
+      list.append(item);
+    });
   }
 
   async function loadClubMembers(clubId) {
@@ -571,6 +707,7 @@
     document.querySelector('[data-club-name]').textContent = membership.clubs.name;
     document.querySelector('[data-club-role]').textContent = roleLabel(membership.role);
     document.querySelector('[data-owner-invite-tools]').hidden = membership.role !== 'owner';
+    document.querySelector('[data-owner-audit]').hidden = membership.role !== 'owner';
 
     const inviteCard = document.querySelector('[data-new-invite-card]');
     inviteCard.hidden = !createdInviteCode;
@@ -584,6 +721,16 @@
       document.querySelector('[data-member-directory]').textContent =
         '회원 명단을 불러오지 못했습니다.';
       showToast(`회원 명단 오류: ${error.message}`);
+    }
+
+    if (membership.role === 'owner') {
+      try {
+        await loadAuditLogs(membership.club_id);
+      } catch (error) {
+        document.querySelector('[data-audit-list]').textContent =
+          '관리 기록을 불러오지 못했습니다.';
+        showToast(`관리 기록 오류: ${error.message}`);
+      }
     }
   }
 
@@ -744,7 +891,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.4.0';
+    element.textContent = config?.appVersion || '0.5.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
