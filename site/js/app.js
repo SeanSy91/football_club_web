@@ -70,6 +70,7 @@
   let scheduledEvents = [];
   let eventResponses = [];
   let selectedEventId = '';
+  let memberDirectoryLoadId = 0;
   let toastTimer;
 
   const hasSupabaseConfig = Boolean(
@@ -519,6 +520,7 @@
   function resetClub() {
     activeClub = null;
     activeClubMembers = [];
+    memberDirectoryLoadId += 1;
     resetSchedule();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
@@ -720,6 +722,7 @@
   }
 
   async function loadClubMembers(clubId) {
+    const loadId = ++memberDirectoryLoadId;
     const directory = document.querySelector('[data-member-directory]');
     directory.replaceChildren();
     const { data, error } = await supabaseClient
@@ -731,18 +734,27 @@
       .eq('status', 'active')
       .order('joined_at', { ascending: true });
     if (error) throw error;
+    if (loadId !== memberDirectoryLoadId || activeClub?.club_id !== clubId) return;
+
+    const uniqueMembers = Array.from(
+      new Map(data.map((member) => [member.user_id, member])).values(),
+    );
 
     const membersWithAvatars = await Promise.all(
-      data.map(async (member) => ({
+      uniqueMembers.map(async (member) => ({
         member,
         avatarUrl: await resolveAvatarUrl(member),
       })),
     );
-    activeClubMembers = membersWithAvatars;
+    if (loadId !== memberDirectoryLoadId || activeClub?.club_id !== clubId) return;
+
+    const fragment = document.createDocumentFragment();
     membersWithAvatars.forEach(({ member, avatarUrl }) => {
-      directory.append(createMemberCard(member, avatarUrl));
+      fragment.append(createMemberCard(member, avatarUrl));
     });
-    document.querySelector('[data-club-member-count]').textContent = data.length;
+    activeClubMembers = membersWithAvatars;
+    directory.replaceChildren(fragment);
+    document.querySelector('[data-club-member-count]').textContent = uniqueMembers.length;
   }
 
   async function showClubDashboard(membership, createdInviteCode = '') {
@@ -1524,7 +1536,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.7.0';
+    element.textContent = config?.appVersion || '0.7.1';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);

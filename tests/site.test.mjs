@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.7.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v0.7.1 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.7\.0</);
-  assert.match(config, /appVersion: '0\.7\.0'/);
-  assert.match(readme, /`0\.7\.0`/);
+  assert.match(html, /data-app-version>0\.7\.1</);
+  assert.match(config, /appVersion: '0\.7\.1'/);
+  assert.match(readme, /`0\.7\.1`/);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
@@ -349,4 +349,15 @@ test('참가 마이그레이션은 마지막 자리와 자동 승급을 이벤�
   assert.match(migration, /grant execute on function public\.set_event_absent\(uuid\)/);
   assert.match(migration, /grant execute on function public\.cancel_event_participation\(uuid\)/);
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.event_responses/i);
+});
+
+test('회원 명단은 겹친 조회의 이전 응답을 버리고 사용자 ID별로 한 번만 렌더링한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /const loadId = \+\+memberDirectoryLoadId/);
+  assert.match(script, /loadId !== memberDirectoryLoadId/);
+  assert.match(script, /new Map\(data\.map\(\(member\) => \[member\.user_id, member\]\)\)/);
+  assert.match(script, /document\.createDocumentFragment\(\)/);
+  assert.match(script, /directory\.replaceChildren\(fragment\)/);
+  assert.match(script, /uniqueMembers\.length/);
 });
