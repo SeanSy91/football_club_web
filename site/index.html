@@ -43,7 +43,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.6.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.7.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -277,6 +277,49 @@
               <strong>취소된 일정입니다</strong>
               <p data-event-cancellation-reason></p>
             </aside>
+
+            <section class="participation-section" data-event-participation hidden aria-labelledby="participation-title">
+              <div class="participation-heading">
+                <div>
+                  <p class="eyebrow">PARTICIPATION</p>
+                  <h3 id="participation-title">참가 현황</h3>
+                  <p data-my-response>아직 참가 여부를 응답하지 않았습니다.</p>
+                </div>
+                <div class="participation-actions" data-participation-actions>
+                  <button class="save-button" type="button" data-apply-event>참가 신청</button>
+                  <button class="secondary-button" type="button" data-absent-event>불참</button>
+                  <button class="danger-button" type="button" data-cancel-participation hidden>참가 취소</button>
+                </div>
+              </div>
+              <p class="participation-deadline" data-participation-deadline></p>
+              <p class="form-status" role="status" aria-live="polite" data-participation-status></p>
+
+              <div class="participation-counts" aria-label="참가 응답 집계">
+                <div><strong data-confirmed-count>0</strong><span>참가 확정</span></div>
+                <div><strong data-waiting-count>0</strong><span>대기</span></div>
+                <div><strong data-absent-count>0</strong><span>불참·취소</span></div>
+                <div><strong data-unanswered-count>0</strong><span>미응답</span></div>
+              </div>
+
+              <div class="response-rosters">
+                <section aria-labelledby="confirmed-roster-title">
+                  <h4 id="confirmed-roster-title">참가 확정</h4>
+                  <ul data-confirmed-roster></ul>
+                </section>
+                <section aria-labelledby="waiting-roster-title">
+                  <h4 id="waiting-roster-title">대기</h4>
+                  <ul data-waiting-roster></ul>
+                </section>
+                <section aria-labelledby="absent-roster-title">
+                  <h4 id="absent-roster-title">불참·취소</h4>
+                  <ul data-absent-roster></ul>
+                </section>
+                <section aria-labelledby="unanswered-roster-title">
+                  <h4 id="unanswered-roster-title">미응답</h4>
+                  <ul data-unanswered-roster></ul>
+                </section>
+              </div>
+            </section>
           </article>
 
           <form class="profile-form event-form" data-event-form hidden>

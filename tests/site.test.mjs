@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.6.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v0.7.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.6\.0</);
-  assert.match(config, /appVersion: '0\.6\.0'/);
-  assert.match(readme, /`0\.6\.0`/);
+  assert.match(html, /data-app-version>0\.7\.0</);
+  assert.match(config, /appVersion: '0\.7\.0'/);
+  assert.match(readme, /`0\.7\.0`/);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
@@ -295,4 +295,58 @@ test('일정 마이그레이션은 역할, 상태, 시간과 직접 쓰기 권�
   assert.match(migration, /grant execute on function public\.publish_event/);
   assert.match(migration, /grant execute on function public\.cancel_event/);
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.events/i);
+});
+
+test('일정 상세는 참가 응답과 네 가지 공개 명단을 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-event-participation/);
+  assert.match(html, /data-apply-event/);
+  assert.match(html, /data-absent-event/);
+  assert.match(html, /data-cancel-participation/);
+  assert.match(html, /data-confirmed-roster/);
+  assert.match(html, /data-waiting-roster/);
+  assert.match(html, /data-absent-roster/);
+  assert.match(html, /data-unanswered-roster/);
+  assert.match(html, /aria-live="polite" data-participation-status/);
+});
+
+test('참가 클라이언트는 응답과 관리자 변경을 서버 함수로만 요청한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /\.from\('event_response_profiles'\)/);
+  assert.match(script, /apply_to_event/);
+  assert.match(script, /set_event_absent/);
+  assert.match(script, /cancel_event_participation/);
+  assert.match(script, /admin_change_participant_status/);
+  assert.match(script, /wait_position/);
+  assert.doesNotMatch(script, /\.from\('event_responses'\)\s*\.insert/);
+  assert.doesNotMatch(script, /\.from\('event_responses'\)\s*\.update/);
+  assert.doesNotMatch(script, /\.from\('event_responses'\)\s*\.delete/);
+});
+
+test('참가 마이그레이션은 마지막 자리와 자동 승급을 이벤트 잠금 안에서 처리한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040007_create_event_responses.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.event_responses/);
+  assert.match(migration, /status in \('confirmed', 'waiting', 'absent', 'cancelled'\)/);
+  assert.match(migration, /alter table public\.event_responses enable row level security/);
+  assert.match(migration, /revoke all on table public\.event_responses from anon, authenticated/);
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /create or replace function public\.apply_to_event/);
+  assert.match(migration, /from public\.events e[\s\S]+for update/);
+  assert.match(migration, /now\(\) >= v_event\.registration_deadline/);
+  assert.match(migration, /now\(\) >= v_event\.cancellation_deadline/);
+  assert.match(migration, /nextval\('public\.event_response_queue_seq'\)/);
+  assert.match(migration, /order by er\.queue_order[\s\S]+for update of er/);
+  assert.match(migration, /private\.promote_next_waiting\(p_event_id\)/);
+  assert.match(migration, /private\.refresh_event_response_counts\(p_event_id\)/);
+  assert.match(migration, /create or replace function public\.admin_change_participant_status/);
+  assert.match(migration, /club_members_cancel_event_responses/);
+  assert.match(migration, /grant execute on function public\.apply_to_event\(uuid\)/);
+  assert.match(migration, /grant execute on function public\.set_event_absent\(uuid\)/);
+  assert.match(migration, /grant execute on function public\.cancel_event_participation\(uuid\)/);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.event_responses/i);
 });

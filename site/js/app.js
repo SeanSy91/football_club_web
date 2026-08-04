@@ -51,6 +51,12 @@
   const createEventButton = document.querySelector('[data-create-event]');
   const eventSaveButton = document.querySelector('[data-event-save]');
   const eventFormStatus = document.querySelector('[data-event-form-status]');
+  const eventParticipation = document.querySelector('[data-event-participation]');
+  const participationActions = document.querySelector('[data-participation-actions]');
+  const participationStatus = document.querySelector('[data-participation-status]');
+  const applyEventButton = document.querySelector('[data-apply-event]');
+  const absentEventButton = document.querySelector('[data-absent-event]');
+  const cancelParticipationButton = document.querySelector('[data-cancel-participation]');
   const config = window.KFC_CONFIG;
   let authReady = false;
   let session = null;
@@ -60,7 +66,9 @@
   let selectedAvatarPreviewUrl = '';
   let useDefaultAvatar = false;
   let activeClub = null;
+  let activeClubMembers = [];
   let scheduledEvents = [];
+  let eventResponses = [];
   let selectedEventId = '';
   let toastTimer;
 
@@ -510,6 +518,7 @@
 
   function resetClub() {
     activeClub = null;
+    activeClubMembers = [];
     resetSchedule();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
@@ -629,6 +638,7 @@
       event_updated: '일정 수정',
       event_published: '일정 공개',
       event_cancelled: '일정 취소',
+      participant_status_changed: '참가자 상태 변경',
     }[action] || '관리 작업';
   }
 
@@ -659,6 +669,9 @@
     }
     if (entry.action === 'event_cancelled') {
       return `${entry.actor_display_name}님이 ${entry.target_display_name} 일정을 취소했습니다.`;
+    }
+    if (entry.action === 'participant_status_changed') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name}님의 참가 상태를 변경했습니다.`;
     }
     return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
   }
@@ -725,6 +738,7 @@
         avatarUrl: await resolveAvatarUrl(member),
       })),
     );
+    activeClubMembers = membersWithAvatars;
     membersWithAvatars.forEach(({ member, avatarUrl }) => {
       directory.append(createMemberCard(member, avatarUrl));
     });
@@ -825,6 +839,7 @@
 
   function resetSchedule() {
     scheduledEvents = [];
+    eventResponses = [];
     selectedEventId = '';
     createEventButton.hidden = true;
     scheduleLoading.hidden = false;
@@ -835,6 +850,7 @@
     eventListView.hidden = false;
     eventDetail.hidden = true;
     eventForm.hidden = true;
+    eventParticipation.hidden = true;
   }
 
   function showScheduleNoClub() {
@@ -883,7 +899,7 @@
     const meta = document.createElement('div');
     meta.className = 'event-card-meta';
     const capacity = document.createElement('span');
-    capacity.textContent = `정원 ${scheduleEvent.capacity}명`;
+    capacity.textContent = `참가 ${scheduleEvent.confirmed_count || 0}/${scheduleEvent.capacity}명`;
     const deadline = document.createElement('span');
     deadline.textContent = `신청 ${formatKoreanDateTime(scheduleEvent.registration_deadline)} 마감`;
     meta.append(capacity, deadline);
@@ -907,12 +923,235 @@
 
   function showEventList() {
     selectedEventId = '';
+    eventResponses = [];
     eventForm.hidden = true;
     eventDetail.hidden = true;
     eventListView.hidden = false;
   }
 
-  function showEventDetail(eventId, moveFocus = true) {
+  function responseStatusLabel(status, waitPosition = null) {
+    return {
+      confirmed: '참가 확정',
+      waiting: waitPosition ? `대기 ${waitPosition}순위` : '대기',
+      absent: '불참',
+      cancelled: '참가 취소',
+    }[status] || '미응답';
+  }
+
+  function createResponseMemberRow(memberEntry, response = null) {
+    const member = memberEntry?.member || response;
+    const item = document.createElement('li');
+    item.className = 'response-member';
+    const summary = document.createElement('div');
+    summary.className = 'response-member-summary';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar-placeholder response-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    setAvatar(avatar, memberEntry?.avatarUrl || '', member.display_name);
+    const copy = document.createElement('div');
+    copy.className = 'response-member-copy';
+    const name = document.createElement('strong');
+    name.textContent = member.display_name;
+    const detail = document.createElement('span');
+    detail.textContent = response
+      ? responseStatusLabel(response.status, response.wait_position)
+      : '미응답';
+    copy.append(name, detail);
+    summary.append(avatar, copy);
+    item.append(summary);
+
+    const selectedScheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
+    if (canManageSchedule() && selectedScheduleEvent?.status === 'published') {
+      const controls = document.createElement('div');
+      controls.className = 'response-manager-control';
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', `${member.display_name}님의 참가 상태`);
+      [
+        ['confirmed', '참가 확정'],
+        ['waiting', '대기'],
+        ['absent', '불참'],
+        ['cancelled', '참가 취소'],
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        option.selected = value === (response?.status || 'absent');
+        select.append(option);
+      });
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.textContent = '변경';
+      save.addEventListener('click', () =>
+        changeParticipantStatus(member.user_id, select.value, save),
+      );
+      controls.append(select, save);
+      item.append(controls);
+    }
+    return item;
+  }
+
+  function renderResponseRoster(selector, entries) {
+    const list = document.querySelector(selector);
+    list.replaceChildren();
+    if (!entries.length) {
+      const empty = document.createElement('li');
+      empty.className = 'response-roster-empty';
+      empty.textContent = '해당 회원이 없습니다.';
+      list.append(empty);
+      return;
+    }
+    entries.forEach(({ memberEntry, response }) => {
+      list.append(createResponseMemberRow(memberEntry, response));
+    });
+  }
+
+  async function loadEventResponses(scheduleEvent) {
+    eventResponses = [];
+    eventParticipation.hidden = scheduleEvent.status === 'draft';
+    if (scheduleEvent.status === 'draft') return;
+
+    participationStatus.textContent = '참가 현황을 불러오고 있습니다.';
+    participationStatus.classList.remove('is-error');
+    const { data, error } = await supabaseClient
+      .from('event_response_profiles')
+      .select(
+        'event_id, club_id, user_id, status, queue_order, wait_position, responded_at, display_name, age, avatar_url, avatar_path, use_default_avatar, preferred_position, preferred_foot, shirt_number',
+      )
+      .eq('event_id', scheduleEvent.id)
+      .order('queue_order', { ascending: true });
+
+    if (selectedEventId !== scheduleEvent.id) return;
+    if (error) {
+      participationStatus.textContent = `참가 현황 오류: ${error.message}`;
+      participationStatus.classList.add('is-error');
+      return;
+    }
+
+    eventResponses = data;
+    participationStatus.textContent = '';
+    const membersById = new Map(
+      activeClubMembers.map((memberEntry) => [memberEntry.member.user_id, memberEntry]),
+    );
+    const entryFor = (response) => ({
+      memberEntry: membersById.get(response.user_id) || { member: response, avatarUrl: '' },
+      response,
+    });
+    const confirmed = data.filter((response) => response.status === 'confirmed').map(entryFor);
+    const waiting = data.filter((response) => response.status === 'waiting').map(entryFor);
+    const absent = data
+      .filter((response) => ['absent', 'cancelled'].includes(response.status))
+      .map(entryFor);
+    const responseUserIds = new Set(data.map((response) => response.user_id));
+    const unanswered = activeClubMembers
+      .filter((memberEntry) => !responseUserIds.has(memberEntry.member.user_id))
+      .map((memberEntry) => ({ memberEntry, response: null }));
+
+    renderResponseRoster('[data-confirmed-roster]', confirmed);
+    renderResponseRoster('[data-waiting-roster]', waiting);
+    renderResponseRoster('[data-absent-roster]', absent);
+    renderResponseRoster('[data-unanswered-roster]', unanswered);
+    document.querySelector('[data-confirmed-count]').textContent = confirmed.length;
+    document.querySelector('[data-waiting-count]').textContent = waiting.length;
+    document.querySelector('[data-absent-count]').textContent = absent.length;
+    document.querySelector('[data-unanswered-count]').textContent = unanswered.length;
+
+    const myResponse = data.find((response) => response.user_id === session.user.id);
+    document.querySelector('[data-my-response]').textContent = myResponse
+      ? `내 응답: ${responseStatusLabel(myResponse.status, myResponse.wait_position)}`
+      : '아직 참가 여부를 응답하지 않았습니다.';
+
+    const now = Date.now();
+    const registrationOpen = now < new Date(scheduleEvent.registration_deadline).getTime();
+    const cancellationOpen = now < new Date(scheduleEvent.cancellation_deadline).getTime();
+    const activeResponse = ['confirmed', 'waiting'].includes(myResponse?.status);
+    applyEventButton.hidden = !registrationOpen || activeResponse;
+    absentEventButton.hidden = myResponse?.status === 'absent'
+      || (activeResponse ? !cancellationOpen : !registrationOpen);
+    cancelParticipationButton.hidden = !activeResponse || !cancellationOpen;
+    participationActions.hidden = scheduleEvent.status !== 'published'
+      || [applyEventButton, absentEventButton, cancelParticipationButton].every(
+        (button) => button.hidden,
+      );
+    document.querySelector('[data-participation-deadline]').textContent = scheduleEvent.status === 'cancelled'
+      ? '일정이 취소되어 참가 응답을 변경할 수 없습니다.'
+      : `신청 마감 ${formatKoreanDateTime(scheduleEvent.registration_deadline)} · 취소 마감 ${formatKoreanDateTime(scheduleEvent.cancellation_deadline)}`;
+  }
+
+  async function refreshSelectedEvent() {
+    const eventId = selectedEventId;
+    await loadSchedule(activeClub);
+    await showEventDetail(eventId, false);
+  }
+
+  function setParticipationBusy(busy) {
+    [applyEventButton, absentEventButton, cancelParticipationButton].forEach((button) => {
+      button.disabled = busy;
+    });
+  }
+
+  async function applyToSelectedEvent() {
+    if (!selectedEventId) return;
+    setParticipationBusy(true);
+    const { data, error } = await supabaseClient.rpc('apply_to_event', {
+      p_event_id: selectedEventId,
+    });
+    setParticipationBusy(false);
+    if (error) {
+      showToast(`참가 신청에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await refreshSelectedEvent();
+    showToast(data.status === 'confirmed' ? '참가가 확정되었습니다.' : `대기 ${data.wait_position}순위로 등록되었습니다.`);
+  }
+
+  async function setSelectedEventAbsent() {
+    if (!selectedEventId || !window.confirm('이 일정에 불참으로 응답할까요?')) return;
+    setParticipationBusy(true);
+    const { error } = await supabaseClient.rpc('set_event_absent', {
+      p_event_id: selectedEventId,
+    });
+    setParticipationBusy(false);
+    if (error) {
+      showToast(`불참 응답에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await refreshSelectedEvent();
+    showToast('불참으로 응답했습니다.');
+  }
+
+  async function cancelSelectedParticipation() {
+    if (!selectedEventId || !window.confirm('참가 또는 대기 신청을 취소할까요?')) return;
+    setParticipationBusy(true);
+    const { error } = await supabaseClient.rpc('cancel_event_participation', {
+      p_event_id: selectedEventId,
+    });
+    setParticipationBusy(false);
+    if (error) {
+      showToast(`참가 취소에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await refreshSelectedEvent();
+    showToast('참가 신청을 취소했습니다.');
+  }
+
+  async function changeParticipantStatus(userId, newStatus, button) {
+    if (!selectedEventId || !canManageSchedule()) return;
+    button.disabled = true;
+    const { error } = await supabaseClient.rpc('admin_change_participant_status', {
+      p_event_id: selectedEventId,
+      p_target_user_id: userId,
+      p_new_status: newStatus,
+    });
+    button.disabled = false;
+    if (error) {
+      showToast(`참가자 상태 변경에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await refreshSelectedEvent();
+    showToast('참가자 상태를 변경했습니다.');
+  }
+
+  async function showEventDetail(eventId, moveFocus = true) {
     const scheduleEvent = scheduledEvents.find((item) => item.id === eventId);
     if (!scheduleEvent) {
       showEventList();
@@ -930,7 +1169,8 @@
     document.querySelector('[data-event-detail-date]').textContent =
       `${formatKoreanDateTime(scheduleEvent.starts_at)} – ${formatKoreanTime(scheduleEvent.ends_at)}`;
     document.querySelector('[data-event-detail-venue]').textContent = scheduleEvent.venue;
-    document.querySelector('[data-event-detail-capacity]').textContent = `${scheduleEvent.capacity}명`;
+    document.querySelector('[data-event-detail-capacity]').textContent =
+      `${scheduleEvent.confirmed_count || 0}/${scheduleEvent.capacity}명`;
     document.querySelector('[data-event-detail-registration]').textContent =
       formatKoreanDateTime(scheduleEvent.registration_deadline);
     document.querySelector('[data-event-detail-cancellation]').textContent =
@@ -949,6 +1189,7 @@
     document.querySelector('[data-publish-event]').hidden = scheduleEvent.status !== 'draft';
     document.querySelector('[data-cancel-event]').hidden = scheduleEvent.status !== 'published';
     if (moveFocus) document.querySelector('[data-event-detail-title]').focus();
+    await loadEventResponses(scheduleEvent);
   }
 
   async function loadSchedule(membership) {
@@ -965,7 +1206,7 @@
     const { data, error } = await supabaseClient
       .from('events')
       .select(
-        'id, club_id, title, description, venue, starts_at, ends_at, capacity, registration_deadline, cancellation_deadline, status, cancellation_reason, published_at, cancelled_at, created_at, updated_at',
+        'id, club_id, title, description, venue, starts_at, ends_at, capacity, confirmed_count, waiting_count, registration_deadline, cancellation_deadline, status, cancellation_reason, published_at, cancelled_at, created_at, updated_at',
       )
       .eq('club_id', membership.club_id)
       .gte('starts_at', new Date().toISOString())
@@ -1283,7 +1524,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.6.0';
+    element.textContent = config?.appVersion || '0.7.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -1332,6 +1573,9 @@
   });
   document.querySelector('[data-publish-event]')?.addEventListener('click', publishSelectedEvent);
   document.querySelector('[data-cancel-event]')?.addEventListener('click', cancelSelectedEvent);
+  applyEventButton?.addEventListener('click', applyToSelectedEvent);
+  absentEventButton?.addEventListener('click', setSelectedEventAbsent);
+  cancelParticipationButton?.addEventListener('click', cancelSelectedParticipation);
   joinClubForm?.elements.inviteCode?.addEventListener('input', (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   });
