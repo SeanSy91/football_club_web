@@ -220,14 +220,79 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.5.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v0.6.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.5\.0</);
-  assert.match(config, /appVersion: '0\.5\.0'/);
-  assert.match(readme, /`0\.5\.0`/);
+  assert.match(html, /data-app-version>0\.6\.0</);
+  assert.match(config, /appVersion: '0\.6\.0'/);
+  assert.match(readme, /`0\.6\.0`/);
+});
+
+test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-view="schedule"/);
+  assert.match(html, /data-schedule-loading/);
+  assert.match(html, /data-schedule-no-club/);
+  assert.match(html, /data-schedule-list/);
+  assert.match(html, /data-event-detail/);
+  assert.match(html, /data-event-form/);
+  assert.match(html, /name="title"[^>]+required[^>]+minlength="2"[^>]+maxlength="80"/);
+  assert.match(html, /name="startsAt"[^>]+type="datetime-local"[^>]+required/);
+  assert.match(html, /name="registrationDeadline"[^>]+type="datetime-local"[^>]+required/);
+  assert.match(html, /name="cancellationDeadline"[^>]+type="datetime-local"[^>]+required/);
+  assert.match(html, /name="capacity"[^>]+min="1"[^>]+max="100"/);
+  assert.match(html, /aria-live="polite" data-event-form-status/);
+});
+
+test('일정 클라이언트는 한국 시간을 변환하고 서버 함수로만 관리 작업을 요청한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /timeZone: 'Asia\/Seoul'/);
+  assert.match(script, /new Date\(`\$\{value\}:00\+09:00`\)/);
+  assert.match(script, /activeClub\?\.role/);
+  assert.match(script, /create_event/);
+  assert.match(script, /update_event/);
+  assert.match(script, /publish_event/);
+  assert.match(script, /cancel_event/);
+  assert.match(script, /\.from\('events'\)/);
+  assert.doesNotMatch(script, /\.from\('events'\)\s*\.insert/);
+  assert.doesNotMatch(script, /\.from\('events'\)\s*\.update/);
+  assert.doesNotMatch(script, /\.from\('events'\)\s*\.delete/);
+});
+
+test('일정 마이그레이션은 역할, 상태, 시간과 직접 쓰기 권한을 서버에서 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040006_create_events.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.events/);
+  assert.match(migration, /status in \('draft', 'published', 'cancelled'\)/);
+  assert.match(migration, /capacity between 1 and 100/);
+  assert.match(migration, /ends_at > starts_at/);
+  assert.match(migration, /registration_deadline < starts_at/);
+  assert.match(migration, /cancellation_deadline >= registration_deadline/);
+  assert.match(migration, /alter table public\.events enable row level security/);
+  assert.match(migration, /revoke all on table public\.events from anon, authenticated/);
+  assert.match(migration, /cm\.role in \('owner', 'admin'\)/);
+  assert.match(migration, /status in \('published', 'cancelled'\)/);
+  assert.match(migration, /private\.validate_event_details/);
+  assert.match(migration, /p_starts_at <= now\(\)/);
+  assert.match(migration, /p_registration_deadline <= now\(\)/);
+  assert.match(migration, /v_event\.status <> 'draft'/);
+  assert.match(migration, /v_event\.status <> 'published'/);
+  assert.match(migration, /target_type in \('club', 'member', 'invite', 'event'\)/);
+  assert.match(migration, /'event_created'/);
+  assert.match(migration, /'event_updated'/);
+  assert.match(migration, /'event_published'/);
+  assert.match(migration, /'event_cancelled'/);
+  assert.match(migration, /grant execute on function public\.create_event/);
+  assert.match(migration, /grant execute on function public\.update_event/);
+  assert.match(migration, /grant execute on function public\.publish_event/);
+  assert.match(migration, /grant execute on function public\.cancel_event/);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.events/i);
 });

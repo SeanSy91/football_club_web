@@ -43,7 +43,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.5.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.6.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -217,15 +217,123 @@
       </section>
 
       <section class="view content-view" data-view="schedule" aria-labelledby="schedule-title" hidden>
-        <div class="section-heading">
-          <p class="eyebrow">SCHEDULE</p>
-          <h1 id="schedule-title">다가오는 일정</h1>
-          <p>Supabase 연결 후 실제 일정과 참가 현황이 표시됩니다.</p>
+        <div class="schedule-heading">
+          <div class="section-heading">
+            <p class="eyebrow">SCHEDULE</p>
+            <h1 id="schedule-title">다가오는 일정</h1>
+            <p>클럽의 경기 일정, 정원과 신청·취소 마감을 한국 시간으로 확인합니다.</p>
+          </div>
+          <button class="save-button" type="button" data-create-event hidden>새 일정 작성</button>
         </div>
-        <div class="empty-state">
+
+        <div class="schedule-loading" data-schedule-loading role="status">
+          <span class="loading-dot" aria-hidden="true"></span>
+          <span>일정을 확인하고 있습니다.</span>
+        </div>
+
+        <div class="empty-state" data-schedule-no-club hidden>
+          <span aria-hidden="true">KFC</span>
+          <h2>먼저 클럽에 가입해 주세요</h2>
+          <p>일정은 같은 클럽의 활성 회원에게만 공개됩니다.</p>
+          <a class="secondary-button schedule-empty-link" href="#club">클럽 화면으로 이동</a>
+        </div>
+
+        <div class="schedule-workspace" data-schedule-workspace hidden>
+          <section data-event-list-view aria-labelledby="event-list-title">
+            <h2 class="visually-hidden" id="event-list-title">일정 목록</h2>
+            <div class="schedule-list" data-schedule-list></div>
+            <div class="empty-state schedule-empty" data-schedule-empty hidden>
+              <span aria-hidden="true">24</span>
+              <h2>아직 등록된 일정이 없습니다</h2>
+              <p data-schedule-empty-message>관리자가 일정을 공개하면 이곳에 표시됩니다.</p>
+            </div>
+          </section>
+
+          <article class="event-detail" data-event-detail hidden aria-labelledby="event-detail-title">
+            <button class="back-link event-back" type="button" data-event-back>← 일정 목록</button>
+            <div class="event-detail-heading">
+              <div>
+                <span class="event-status" data-event-detail-status></span>
+                <h2 id="event-detail-title" tabindex="-1" data-event-detail-title>일정 상세</h2>
+                <p data-event-detail-date></p>
+              </div>
+              <div class="event-manager-actions" data-event-manager-actions hidden>
+                <button class="secondary-button" type="button" data-edit-event>수정</button>
+                <button class="save-button" type="button" data-publish-event>일정 공개</button>
+                <button class="danger-button" type="button" data-cancel-event>일정 취소</button>
+              </div>
+            </div>
+            <dl class="event-detail-grid">
+              <div><dt>장소</dt><dd data-event-detail-venue>—</dd></div>
+              <div><dt>정원</dt><dd data-event-detail-capacity>—</dd></div>
+              <div><dt>신청 마감</dt><dd data-event-detail-registration>—</dd></div>
+              <div><dt>취소 마감</dt><dd data-event-detail-cancellation>—</dd></div>
+            </dl>
+            <div class="event-description">
+              <h3>상세 안내</h3>
+              <p data-event-detail-description>등록된 안내가 없습니다.</p>
+            </div>
+            <aside class="event-cancel-notice" data-event-cancel-notice hidden>
+              <strong>취소된 일정입니다</strong>
+              <p data-event-cancellation-reason></p>
+            </aside>
+          </article>
+
+          <form class="profile-form event-form" data-event-form hidden>
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">EVENT EDITOR</p>
+                <h2 tabindex="-1" data-event-form-title>새 일정 작성</h2>
+              </div>
+              <span>모든 시각은 한국 시간 · 필수 항목 *</span>
+            </div>
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>일정 이름 *</span>
+                <input name="title" type="text" required minlength="2" maxlength="80" placeholder="예: 8월 정기 풋살" />
+              </label>
+              <label class="form-field form-field-wide">
+                <span>장소 *</span>
+                <input name="venue" type="text" required minlength="2" maxlength="120" placeholder="예: 상암 풋살장 A구장" />
+              </label>
+              <label class="form-field">
+                <span>시작 시각 *</span>
+                <input name="startsAt" type="datetime-local" required step="60" />
+              </label>
+              <label class="form-field">
+                <span>종료 시각 *</span>
+                <input name="endsAt" type="datetime-local" required step="60" />
+              </label>
+              <label class="form-field">
+                <span>신청 마감 *</span>
+                <input name="registrationDeadline" type="datetime-local" required step="60" />
+              </label>
+              <label class="form-field">
+                <span>취소 마감 *</span>
+                <input name="cancellationDeadline" type="datetime-local" required step="60" />
+              </label>
+              <label class="form-field">
+                <span>정원 *</span>
+                <input name="capacity" type="number" required min="1" max="100" inputmode="numeric" value="18" />
+              </label>
+              <label class="form-field form-field-wide">
+                <span>상세 안내</span>
+                <textarea name="description" rows="5" maxlength="2000" placeholder="준비물, 주차 안내 등 회원에게 필요한 내용을 적어 주세요."></textarea>
+                <small>최대 2,000자</small>
+              </label>
+            </div>
+            <p class="form-status" role="status" aria-live="polite" data-event-form-status></p>
+            <div class="form-actions">
+              <button class="secondary-button" type="button" data-event-form-cancel>돌아가기</button>
+              <button class="save-button" type="submit" data-event-save>임시 저장</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="empty-state" data-schedule-error hidden>
           <span aria-hidden="true">24</span>
-          <h2>아직 등록된 일정이 없습니다</h2>
-          <p>클럽 가입과 일정 기능은 다음 개발 단계에서 연결합니다.</p>
+          <h2>일정을 불러오지 못했습니다</h2>
+          <p data-schedule-error-message>잠시 후 다시 시도해 주세요.</p>
         </div>
       </section>
 

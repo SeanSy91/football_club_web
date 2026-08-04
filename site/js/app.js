@@ -39,6 +39,18 @@
   const createClubSubmit = document.querySelector('[data-create-club-submit]');
   const joinClubSubmit = document.querySelector('[data-join-club-submit]');
   const rotateInviteButton = document.querySelector('[data-rotate-invite-code]');
+  const scheduleLoading = document.querySelector('[data-schedule-loading]');
+  const scheduleNoClub = document.querySelector('[data-schedule-no-club]');
+  const scheduleWorkspace = document.querySelector('[data-schedule-workspace]');
+  const scheduleError = document.querySelector('[data-schedule-error]');
+  const scheduleList = document.querySelector('[data-schedule-list]');
+  const scheduleEmpty = document.querySelector('[data-schedule-empty]');
+  const eventListView = document.querySelector('[data-event-list-view]');
+  const eventDetail = document.querySelector('[data-event-detail]');
+  const eventForm = document.querySelector('[data-event-form]');
+  const createEventButton = document.querySelector('[data-create-event]');
+  const eventSaveButton = document.querySelector('[data-event-save]');
+  const eventFormStatus = document.querySelector('[data-event-form-status]');
   const config = window.KFC_CONFIG;
   let authReady = false;
   let session = null;
@@ -48,6 +60,8 @@
   let selectedAvatarPreviewUrl = '';
   let useDefaultAvatar = false;
   let activeClub = null;
+  let scheduledEvents = [];
+  let selectedEventId = '';
   let toastTimer;
 
   const hasSupabaseConfig = Boolean(
@@ -496,6 +510,7 @@
 
   function resetClub() {
     activeClub = null;
+    resetSchedule();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
     clubOnboarding.hidden = true;
@@ -508,6 +523,7 @@
 
   function showClubOnboarding() {
     activeClub = null;
+    showScheduleNoClub();
     clubLoading.hidden = true;
     clubDashboard.hidden = true;
     clubOnboarding.hidden = false;
@@ -609,6 +625,10 @@
       member_removed: '회원 탈퇴 처리',
       invite_code_rotated: '초대 코드 재발급',
       member_joined: '회원 가입',
+      event_created: '일정 작성',
+      event_updated: '일정 수정',
+      event_published: '일정 공개',
+      event_cancelled: '일정 취소',
     }[action] || '관리 작업';
   }
 
@@ -627,6 +647,18 @@
     }
     if (entry.action === 'member_joined') {
       return `${entry.target_display_name}님이 초대 코드로 가입했습니다.`;
+    }
+    if (entry.action === 'event_created') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 일정을 작성했습니다.`;
+    }
+    if (entry.action === 'event_updated') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 일정을 수정했습니다.`;
+    }
+    if (entry.action === 'event_published') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 일정을 공개했습니다.`;
+    }
+    if (entry.action === 'event_cancelled') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 일정을 취소했습니다.`;
     }
     return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
   }
@@ -732,6 +764,366 @@
         showToast(`관리 기록 오류: ${error.message}`);
       }
     }
+
+    await loadSchedule(membership);
+  }
+
+  function canManageSchedule(membership = activeClub) {
+    return ['owner', 'admin'].includes(membership?.role);
+  }
+
+  function eventStatusLabel(status) {
+    return {
+      draft: '임시 저장',
+      published: '공개',
+      cancelled: '취소',
+    }[status] || status;
+  }
+
+  function formatKoreanDateTime(value) {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(value));
+  }
+
+  function formatKoreanTime(value) {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(value));
+  }
+
+  function toKoreanDateTimeLocal(value) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(value))
+      .reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  }
+
+  function koreanDateTimeLocalToIso(value) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+    const date = new Date(`${value}:00+09:00`);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function resetSchedule() {
+    scheduledEvents = [];
+    selectedEventId = '';
+    createEventButton.hidden = true;
+    scheduleLoading.hidden = false;
+    scheduleNoClub.hidden = true;
+    scheduleWorkspace.hidden = true;
+    scheduleError.hidden = true;
+    scheduleList.replaceChildren();
+    eventListView.hidden = false;
+    eventDetail.hidden = true;
+    eventForm.hidden = true;
+  }
+
+  function showScheduleNoClub() {
+    scheduledEvents = [];
+    selectedEventId = '';
+    createEventButton.hidden = true;
+    scheduleLoading.hidden = true;
+    scheduleWorkspace.hidden = true;
+    scheduleError.hidden = true;
+    scheduleNoClub.hidden = false;
+  }
+
+  function showScheduleError(message) {
+    scheduleLoading.hidden = true;
+    scheduleNoClub.hidden = true;
+    scheduleWorkspace.hidden = true;
+    scheduleError.hidden = false;
+    document.querySelector('[data-schedule-error-message]').textContent = message;
+  }
+
+  function createEventCard(scheduleEvent) {
+    const card = document.createElement('article');
+    card.className = 'event-card';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'event-card-button';
+    button.dataset.openEvent = scheduleEvent.id;
+    button.setAttribute('aria-label', `${scheduleEvent.title} 일정 상세 보기`);
+
+    const topline = document.createElement('div');
+    topline.className = 'event-card-topline';
+    const date = document.createElement('span');
+    date.className = 'event-card-date';
+    date.textContent = formatKoreanDateTime(scheduleEvent.starts_at);
+    const status = document.createElement('span');
+    status.className = 'event-status';
+    status.dataset.status = scheduleEvent.status;
+    status.textContent = eventStatusLabel(scheduleEvent.status);
+    topline.append(date, status);
+
+    const title = document.createElement('h3');
+    title.textContent = scheduleEvent.title;
+    const venue = document.createElement('p');
+    venue.className = 'event-card-venue';
+    venue.textContent = scheduleEvent.venue;
+    const meta = document.createElement('div');
+    meta.className = 'event-card-meta';
+    const capacity = document.createElement('span');
+    capacity.textContent = `정원 ${scheduleEvent.capacity}명`;
+    const deadline = document.createElement('span');
+    deadline.textContent = `신청 ${formatKoreanDateTime(scheduleEvent.registration_deadline)} 마감`;
+    meta.append(capacity, deadline);
+
+    button.append(topline, title, venue, meta);
+    button.addEventListener('click', () => showEventDetail(scheduleEvent.id));
+    card.append(button);
+    return card;
+  }
+
+  function renderScheduleList() {
+    scheduleList.replaceChildren();
+    scheduledEvents.forEach((scheduleEvent) => {
+      scheduleList.append(createEventCard(scheduleEvent));
+    });
+    scheduleEmpty.hidden = scheduledEvents.length > 0;
+    document.querySelector('[data-schedule-empty-message]').textContent = canManageSchedule()
+      ? '새 일정을 임시 저장한 뒤 공개해 주세요.'
+      : '관리자가 일정을 공개하면 이곳에 표시됩니다.';
+  }
+
+  function showEventList() {
+    selectedEventId = '';
+    eventForm.hidden = true;
+    eventDetail.hidden = true;
+    eventListView.hidden = false;
+  }
+
+  function showEventDetail(eventId, moveFocus = true) {
+    const scheduleEvent = scheduledEvents.find((item) => item.id === eventId);
+    if (!scheduleEvent) {
+      showEventList();
+      return;
+    }
+
+    selectedEventId = scheduleEvent.id;
+    eventListView.hidden = true;
+    eventForm.hidden = true;
+    eventDetail.hidden = false;
+    const status = document.querySelector('[data-event-detail-status]');
+    status.dataset.status = scheduleEvent.status;
+    status.textContent = eventStatusLabel(scheduleEvent.status);
+    document.querySelector('[data-event-detail-title]').textContent = scheduleEvent.title;
+    document.querySelector('[data-event-detail-date]').textContent =
+      `${formatKoreanDateTime(scheduleEvent.starts_at)} – ${formatKoreanTime(scheduleEvent.ends_at)}`;
+    document.querySelector('[data-event-detail-venue]').textContent = scheduleEvent.venue;
+    document.querySelector('[data-event-detail-capacity]').textContent = `${scheduleEvent.capacity}명`;
+    document.querySelector('[data-event-detail-registration]').textContent =
+      formatKoreanDateTime(scheduleEvent.registration_deadline);
+    document.querySelector('[data-event-detail-cancellation]').textContent =
+      formatKoreanDateTime(scheduleEvent.cancellation_deadline);
+    document.querySelector('[data-event-detail-description]').textContent =
+      scheduleEvent.description || '등록된 안내가 없습니다.';
+
+    const cancelNotice = document.querySelector('[data-event-cancel-notice]');
+    cancelNotice.hidden = scheduleEvent.status !== 'cancelled';
+    document.querySelector('[data-event-cancellation-reason]').textContent =
+      scheduleEvent.cancellation_reason || '';
+
+    const managerActions = document.querySelector('[data-event-manager-actions]');
+    managerActions.hidden = !canManageSchedule() || scheduleEvent.status === 'cancelled';
+    document.querySelector('[data-edit-event]').hidden = scheduleEvent.status === 'cancelled';
+    document.querySelector('[data-publish-event]').hidden = scheduleEvent.status !== 'draft';
+    document.querySelector('[data-cancel-event]').hidden = scheduleEvent.status !== 'published';
+    if (moveFocus) document.querySelector('[data-event-detail-title]').focus();
+  }
+
+  async function loadSchedule(membership) {
+    if (!membership) {
+      showScheduleNoClub();
+      return;
+    }
+
+    scheduleLoading.hidden = false;
+    scheduleNoClub.hidden = true;
+    scheduleWorkspace.hidden = true;
+    scheduleError.hidden = true;
+    createEventButton.hidden = !canManageSchedule(membership);
+    const { data, error } = await supabaseClient
+      .from('events')
+      .select(
+        'id, club_id, title, description, venue, starts_at, ends_at, capacity, registration_deadline, cancellation_deadline, status, cancellation_reason, published_at, cancelled_at, created_at, updated_at',
+      )
+      .eq('club_id', membership.club_id)
+      .gte('starts_at', new Date().toISOString())
+      .order('starts_at', { ascending: true });
+
+    if (error) {
+      showScheduleError(`일정 조회 오류: ${error.message}`);
+      return;
+    }
+
+    scheduledEvents = data;
+    selectedEventId = '';
+    renderScheduleList();
+    scheduleLoading.hidden = true;
+    scheduleWorkspace.hidden = false;
+    showEventList();
+  }
+
+  function openEventForm(scheduleEvent = null) {
+    if (!canManageSchedule()) return;
+    eventForm.reset();
+    eventFormStatus.textContent = '';
+    eventFormStatus.classList.remove('is-error');
+    eventForm.dataset.eventId = scheduleEvent?.id || '';
+    document.querySelector('[data-event-form-title]').textContent = scheduleEvent
+      ? '일정 수정'
+      : '새 일정 작성';
+    eventSaveButton.textContent = scheduleEvent ? '변경 저장' : '임시 저장';
+
+    if (scheduleEvent) {
+      eventForm.elements.title.value = scheduleEvent.title;
+      eventForm.elements.venue.value = scheduleEvent.venue;
+      eventForm.elements.startsAt.value = toKoreanDateTimeLocal(scheduleEvent.starts_at);
+      eventForm.elements.endsAt.value = toKoreanDateTimeLocal(scheduleEvent.ends_at);
+      eventForm.elements.registrationDeadline.value =
+        toKoreanDateTimeLocal(scheduleEvent.registration_deadline);
+      eventForm.elements.cancellationDeadline.value =
+        toKoreanDateTimeLocal(scheduleEvent.cancellation_deadline);
+      eventForm.elements.capacity.value = scheduleEvent.capacity;
+      eventForm.elements.description.value = scheduleEvent.description || '';
+    } else {
+      const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      startsAt.setUTCMinutes(0, 0, 0);
+      const endsAt = new Date(startsAt.getTime() + 2 * 60 * 60 * 1000);
+      const registrationDeadline = new Date(startsAt.getTime() - 24 * 60 * 60 * 1000);
+      const cancellationDeadline = new Date(startsAt.getTime() - 6 * 60 * 60 * 1000);
+      eventForm.elements.startsAt.value = toKoreanDateTimeLocal(startsAt);
+      eventForm.elements.endsAt.value = toKoreanDateTimeLocal(endsAt);
+      eventForm.elements.registrationDeadline.value = toKoreanDateTimeLocal(registrationDeadline);
+      eventForm.elements.cancellationDeadline.value = toKoreanDateTimeLocal(cancellationDeadline);
+      eventForm.elements.capacity.value = 18;
+    }
+
+    eventListView.hidden = true;
+    eventDetail.hidden = true;
+    eventForm.hidden = false;
+    document.querySelector('[data-event-form-title]').focus();
+  }
+
+  function closeEventForm() {
+    const eventId = eventForm.dataset.eventId;
+    if (eventId) {
+      showEventDetail(eventId);
+    } else {
+      showEventList();
+    }
+  }
+
+  function setEventFormStatus(message, isError = false) {
+    eventFormStatus.textContent = message;
+    eventFormStatus.classList.toggle('is-error', isError);
+  }
+
+  function eventFormRpcParameters() {
+    return {
+      p_club_id: activeClub.club_id,
+      p_title: eventForm.elements.title.value.trim(),
+      p_description: eventForm.elements.description.value.trim() || null,
+      p_venue: eventForm.elements.venue.value.trim(),
+      p_starts_at: koreanDateTimeLocalToIso(eventForm.elements.startsAt.value),
+      p_ends_at: koreanDateTimeLocalToIso(eventForm.elements.endsAt.value),
+      p_capacity: Number(eventForm.elements.capacity.value),
+      p_registration_deadline: koreanDateTimeLocalToIso(
+        eventForm.elements.registrationDeadline.value,
+      ),
+      p_cancellation_deadline: koreanDateTimeLocalToIso(
+        eventForm.elements.cancellationDeadline.value,
+      ),
+    };
+  }
+
+  async function saveEvent(event) {
+    event.preventDefault();
+    if (!canManageSchedule() || !eventForm.reportValidity()) return;
+    const eventId = eventForm.dataset.eventId;
+    const parameters = eventFormRpcParameters();
+    const rpcName = eventId ? 'update_event' : 'create_event';
+    if (eventId) parameters.p_event_id = eventId;
+
+    eventSaveButton.disabled = true;
+    setEventFormStatus(eventId ? '일정 변경을 저장하고 있습니다.' : '일정을 임시 저장하고 있습니다.');
+    const { data, error } = await supabaseClient.rpc(rpcName, parameters);
+    eventSaveButton.disabled = false;
+    if (error) {
+      setEventFormStatus(error.message, true);
+      return;
+    }
+
+    const savedEventId = eventId || data;
+    await loadSchedule(activeClub);
+    showEventDetail(savedEventId);
+    showToast(eventId ? '일정 변경을 저장했습니다.' : '일정을 임시 저장했습니다.');
+  }
+
+  async function publishSelectedEvent() {
+    const scheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
+    if (!scheduleEvent || !canManageSchedule() || scheduleEvent.status !== 'draft') return;
+    if (!window.confirm('이 일정을 모든 클럽 회원에게 공개할까요?')) return;
+
+    const publishButton = document.querySelector('[data-publish-event]');
+    publishButton.disabled = true;
+    const { error } = await supabaseClient.rpc('publish_event', {
+      p_event_id: scheduleEvent.id,
+      p_club_id: activeClub.club_id,
+    });
+    publishButton.disabled = false;
+    if (error) {
+      showToast(`일정을 공개하지 못했습니다: ${error.message}`);
+      return;
+    }
+
+    await loadSchedule(activeClub);
+    showEventDetail(scheduleEvent.id);
+    showToast('일정을 공개했습니다.');
+  }
+
+  async function cancelSelectedEvent() {
+    const scheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
+    if (!scheduleEvent || !canManageSchedule() || scheduleEvent.status !== 'published') return;
+    const reason = window.prompt('회원에게 표시할 일정 취소 사유를 입력해 주세요.');
+    if (reason === null) return;
+
+    const cancelButton = document.querySelector('[data-cancel-event]');
+    cancelButton.disabled = true;
+    const { error } = await supabaseClient.rpc('cancel_event', {
+      p_event_id: scheduleEvent.id,
+      p_club_id: activeClub.club_id,
+      p_cancellation_reason: reason.trim(),
+    });
+    cancelButton.disabled = false;
+    if (error) {
+      showToast(`일정을 취소하지 못했습니다: ${error.message}`);
+      return;
+    }
+
+    await loadSchedule(activeClub);
+    showEventDetail(scheduleEvent.id);
+    showToast('일정을 취소했습니다.');
   }
 
   async function loadClub(user, createdInviteCode = '') {
@@ -891,7 +1283,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.5.0';
+    element.textContent = config?.appVersion || '0.6.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -930,6 +1322,16 @@
     copyText(document.querySelector('[data-new-invite-code]').textContent);
   });
   rotateInviteButton?.addEventListener('click', rotateInviteCode);
+  createEventButton?.addEventListener('click', () => openEventForm());
+  eventForm?.addEventListener('submit', saveEvent);
+  document.querySelector('[data-event-form-cancel]')?.addEventListener('click', closeEventForm);
+  document.querySelector('[data-event-back]')?.addEventListener('click', showEventList);
+  document.querySelector('[data-edit-event]')?.addEventListener('click', () => {
+    const scheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
+    if (scheduleEvent) openEventForm(scheduleEvent);
+  });
+  document.querySelector('[data-publish-event]')?.addEventListener('click', publishSelectedEvent);
+  document.querySelector('[data-cancel-event]')?.addEventListener('click', cancelSelectedEvent);
   joinClubForm?.elements.inviteCode?.addEventListener('input', (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   });

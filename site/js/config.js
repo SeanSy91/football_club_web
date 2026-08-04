@@ -2,7 +2,7 @@
 // OAuth client secrets, database passwords, or other private credentials here.
 window.KFC_CONFIG = Object.freeze({
   appName: 'KFC Football Club',
-  appVersion: '0.5.0',
+  appVersion: '0.6.0',
   supabaseUrl: 'https://salmdtkbdruormkhdpkh.supabase.co',
   supabasePublishableKey: 'sb_publishable_EG9mmZl1SR_40ZExz4k4fQ_pJOSJQvf',
 });
