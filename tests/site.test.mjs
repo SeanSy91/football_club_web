@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.0.1 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.1.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.0\.1</);
-  assert.match(config, /appVersion: '1\.0\.1'/);
-  assert.match(readme, /`1\.0\.1`/);
+  assert.match(html, /data-app-version>1\.1\.0</);
+  assert.match(config, /appVersion: '1\.1\.0'/);
+  assert.match(readme, /`1\.1\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -241,7 +241,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.0\.1/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.1\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -265,6 +265,28 @@ test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공�
   assert.match(html, /name="cancellationDeadline"[^>]+type="datetime-local"[^>]+required/);
   assert.match(html, /name="capacity"[^>]+min="1"[^>]+max="100"/);
   assert.match(html, /aria-live="polite" data-event-form-status/);
+});
+
+test('일정 화면은 월간 캘린더와 선택 날짜 일정 추가 기능을 제공한다', async () => {
+  const [html, css, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/styles.css'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-calendar-month-title/);
+  assert.match(html, /data-calendar-previous/);
+  assert.match(html, /data-calendar-today/);
+  assert.match(html, /data-calendar-next/);
+  assert.match(html, /role="grid"[^>]+data-calendar-grid/);
+  assert.match(html, /data-selected-day-title/);
+  assert.match(html, /data-create-event-for-date/);
+  assert.match(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
+  assert.match(script, /function renderScheduleCalendar\(\)/);
+  assert.match(script, /function handleCalendarKeydown/);
+  assert.match(script, /\.gte\('starts_at', monthRange\.startsAt\)/);
+  assert.match(script, /\.lt\('starts_at', monthRange\.endsAt\)/);
+  assert.match(script, /openEventForm\(null, selectedScheduleDate\)/);
 });
 
 test('일정 클라이언트는 한국 시간을 변환하고 서버 함수로만 관리 작업을 요청한다', async () => {

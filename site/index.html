@@ -18,7 +18,7 @@
     <meta property="og:url" content="https://seansy91.github.io/football_club_web/" />
     <meta
       property="og:image"
-      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.0.1"
+      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.1.0"
     />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1179" />
@@ -32,7 +32,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.0.1"
+      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.1.0"
     />
     <meta name="theme-color" content="#12372a" />
     <title>KFC Football Club</title>
@@ -71,7 +71,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>1.0.1</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>1.1.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -268,13 +268,40 @@
 
         <div class="schedule-workspace" data-schedule-workspace hidden>
           <section data-event-list-view aria-labelledby="event-list-title">
-            <h2 class="visually-hidden" id="event-list-title">일정 목록</h2>
-            <div class="schedule-list" data-schedule-list></div>
-            <div class="empty-state schedule-empty" data-schedule-empty hidden>
-              <span aria-hidden="true">24</span>
-              <h2>아직 등록된 일정이 없습니다</h2>
-              <p data-schedule-empty-message>관리자가 일정을 공개하면 이곳에 표시됩니다.</p>
+            <div class="calendar-shell">
+              <div class="calendar-toolbar">
+                <div>
+                  <p class="eyebrow">MONTHLY CALENDAR</p>
+                  <h2 id="event-list-title" tabindex="-1" data-calendar-month-title>월간 일정</h2>
+                </div>
+                <div class="calendar-navigation" aria-label="달력 월 이동">
+                  <button class="calendar-nav-button" type="button" data-calendar-previous aria-label="이전 달">←</button>
+                  <button class="calendar-today-button" type="button" data-calendar-today>오늘</button>
+                  <button class="calendar-nav-button" type="button" data-calendar-next aria-label="다음 달">→</button>
+                </div>
+              </div>
+              <div class="calendar-weekdays" aria-hidden="true">
+                <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              </div>
+              <div class="calendar-grid" role="grid" aria-labelledby="event-list-title" data-calendar-grid></div>
+              <p class="calendar-help">날짜를 선택하면 아래에서 해당 날짜의 일정을 확인할 수 있습니다.</p>
             </div>
+
+            <section class="selected-day-agenda" aria-labelledby="selected-day-title">
+              <div class="selected-day-heading">
+                <div>
+                  <p class="eyebrow">SELECTED DAY</p>
+                  <h2 id="selected-day-title" data-selected-day-title>선택한 날짜</h2>
+                </div>
+                <button class="save-button" type="button" data-create-event-for-date hidden>이 날짜에 일정 추가</button>
+              </div>
+              <div class="schedule-list" data-schedule-list></div>
+              <div class="empty-state schedule-empty" data-schedule-empty hidden>
+                <span aria-hidden="true">24</span>
+                <h2>선택한 날짜에 일정이 없습니다</h2>
+                <p data-schedule-empty-message>관리자가 일정을 공개하면 이곳에 표시됩니다.</p>
+              </div>
+            </section>
           </section>
 
           <article class="event-detail" data-event-detail hidden aria-labelledby="event-detail-title">

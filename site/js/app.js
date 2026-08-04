@@ -47,6 +47,10 @@
   const scheduleError = document.querySelector('[data-schedule-error]');
   const scheduleList = document.querySelector('[data-schedule-list]');
   const scheduleEmpty = document.querySelector('[data-schedule-empty]');
+  const calendarGrid = document.querySelector('[data-calendar-grid]');
+  const calendarMonthTitle = document.querySelector('[data-calendar-month-title]');
+  const selectedDayTitle = document.querySelector('[data-selected-day-title]');
+  const createEventForDateButton = document.querySelector('[data-create-event-for-date]');
   const eventListView = document.querySelector('[data-event-list-view]');
   const eventDetail = document.querySelector('[data-event-detail]');
   const eventForm = document.querySelector('[data-event-form]');
@@ -87,6 +91,8 @@
   let activeClub = null;
   let activeClubMembers = [];
   let scheduledEvents = [];
+  let scheduleMonth = '';
+  let selectedScheduleDate = '';
   let eventResponses = [];
   let attendanceEvents = [];
   let announcements = [];
@@ -943,16 +949,69 @@
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
 
+  function koreanDateKey(value) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(new Date(value))
+      .reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
+  function currentKoreanDate() {
+    return koreanDateKey(new Date());
+  }
+
+  function shiftMonth(month, amount) {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const shifted = new Date(Date.UTC(year, monthNumber - 1 + amount, 1));
+    return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function shiftDate(dateKey, amount) {
+    const [year, monthNumber, day] = dateKey.split('-').map(Number);
+    return new Date(Date.UTC(year, monthNumber - 1, day + amount)).toISOString().slice(0, 10);
+  }
+
+  function scheduleMonthRange(month) {
+    return {
+      startsAt: new Date(`${month}-01T00:00:00+09:00`).toISOString(),
+      endsAt: new Date(`${shiftMonth(month, 1)}-01T00:00:00+09:00`).toISOString(),
+    };
+  }
+
+  function formatCalendarMonth(month) {
+    const [year, monthNumber] = month.split('-').map(Number);
+    return `${year}년 ${monthNumber}월`;
+  }
+
+  function formatKoreanDate(value) {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    }).format(new Date(`${value}T00:00:00+09:00`));
+  }
+
   function resetSchedule() {
     scheduledEvents = [];
     eventResponses = [];
     selectedEventId = '';
+    scheduleMonth = currentKoreanDate().slice(0, 7);
+    selectedScheduleDate = currentKoreanDate();
     createEventButton.hidden = true;
+    createEventForDateButton.hidden = true;
     scheduleLoading.hidden = false;
     scheduleNoClub.hidden = true;
     scheduleWorkspace.hidden = true;
     scheduleError.hidden = true;
     scheduleList.replaceChildren();
+    calendarGrid.replaceChildren();
     eventListView.hidden = false;
     eventDetail.hidden = true;
     eventForm.hidden = true;
@@ -963,6 +1022,7 @@
     scheduledEvents = [];
     selectedEventId = '';
     createEventButton.hidden = true;
+    createEventForDateButton.hidden = true;
     scheduleLoading.hidden = true;
     scheduleWorkspace.hidden = true;
     scheduleError.hidden = true;
@@ -1016,15 +1076,110 @@
     return card;
   }
 
+  function eventsForDate(dateKey) {
+    return scheduledEvents.filter((scheduleEvent) => koreanDateKey(scheduleEvent.starts_at) === dateKey);
+  }
+
+  function renderScheduleCalendar() {
+    calendarGrid.replaceChildren();
+    calendarMonthTitle.textContent = formatCalendarMonth(scheduleMonth);
+    const [year, monthNumber] = scheduleMonth.split('-').map(Number);
+    const firstWeekday = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+    const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    const cellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+    const today = currentKoreanDate();
+
+    for (let index = 0; index < cellCount; index += 1) {
+      const dayNumber = index - firstWeekday + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) {
+        const blank = document.createElement('span');
+        blank.className = 'calendar-day-blank';
+        blank.setAttribute('role', 'gridcell');
+        blank.setAttribute('aria-hidden', 'true');
+        calendarGrid.append(blank);
+        continue;
+      }
+
+      const dateKey = `${scheduleMonth}-${String(dayNumber).padStart(2, '0')}`;
+      const dayEvents = eventsForDate(dateKey);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'calendar-day';
+      button.dataset.calendarDate = dateKey;
+      button.setAttribute('role', 'gridcell');
+      button.setAttribute('aria-selected', String(dateKey === selectedScheduleDate));
+      button.setAttribute(
+        'aria-label',
+        `${formatKoreanDate(dateKey)}, 일정 ${dayEvents.length}개${dateKey === selectedScheduleDate ? ', 선택됨' : ''}`,
+      );
+      if (dateKey === today) button.setAttribute('aria-current', 'date');
+
+      const number = document.createElement('span');
+      number.className = 'calendar-day-number';
+      number.textContent = dayNumber;
+      button.append(number);
+
+      const eventLabels = document.createElement('span');
+      eventLabels.className = 'calendar-event-labels';
+      dayEvents.slice(0, 2).forEach((scheduleEvent) => {
+        const label = document.createElement('span');
+        label.className = 'calendar-event-label';
+        label.dataset.status = scheduleEvent.status;
+        label.textContent = scheduleEvent.title;
+        eventLabels.append(label);
+      });
+      if (dayEvents.length > 2) {
+        const more = document.createElement('span');
+        more.className = 'calendar-event-more';
+        more.textContent = `+${dayEvents.length - 2}`;
+        eventLabels.append(more);
+      }
+      button.append(eventLabels);
+      button.addEventListener('click', () => selectScheduleDate(dateKey));
+      button.addEventListener('keydown', (event) => handleCalendarKeydown(event, dateKey));
+      calendarGrid.append(button);
+    }
+  }
+
   function renderScheduleList() {
     scheduleList.replaceChildren();
-    scheduledEvents.forEach((scheduleEvent) => {
+    const selectedEvents = eventsForDate(selectedScheduleDate);
+    selectedEvents.forEach((scheduleEvent) => {
       scheduleList.append(createEventCard(scheduleEvent));
     });
-    scheduleEmpty.hidden = scheduledEvents.length > 0;
+    selectedDayTitle.textContent = formatKoreanDate(selectedScheduleDate);
+    scheduleEmpty.hidden = selectedEvents.length > 0;
+    const selectedDateIsPast = selectedScheduleDate < currentKoreanDate();
+    createEventForDateButton.hidden = !canManageSchedule();
+    createEventForDateButton.disabled = selectedDateIsPast;
+    createEventForDateButton.title = selectedDateIsPast ? '지난 날짜에는 일정을 추가할 수 없습니다.' : '';
     document.querySelector('[data-schedule-empty-message]').textContent = canManageSchedule()
-      ? '새 일정을 임시 저장한 뒤 공개해 주세요.'
+      ? selectedDateIsPast
+        ? '지난 날짜에는 새 일정을 추가할 수 없습니다.'
+        : '이 날짜에 새 일정을 작성할 수 있습니다.'
       : '관리자가 일정을 공개하면 이곳에 표시됩니다.';
+  }
+
+  function selectScheduleDate(dateKey, moveFocus = false) {
+    selectedScheduleDate = dateKey;
+    renderScheduleCalendar();
+    renderScheduleList();
+    if (moveFocus) calendarGrid.querySelector(`[data-calendar-date="${dateKey}"]`)?.focus();
+  }
+
+  async function handleCalendarKeydown(event, dateKey) {
+    const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const nextDate = shiftDate(dateKey, offsets[event.key]);
+    const nextMonth = nextDate.slice(0, 7);
+    if (nextMonth !== scheduleMonth) {
+      scheduleMonth = nextMonth;
+      selectedScheduleDate = nextDate;
+      await loadSchedule(activeClub, { focusCalendarDate: true });
+      return;
+    }
+    selectScheduleDate(nextDate, true);
   }
 
   function showEventList() {
@@ -1298,12 +1453,14 @@
     await loadEventResponses(scheduleEvent);
   }
 
-  async function loadSchedule(membership) {
+  async function loadSchedule(membership, options = {}) {
     if (!membership) {
       showScheduleNoClub();
       return;
     }
 
+    if (!scheduleMonth) scheduleMonth = currentKoreanDate().slice(0, 7);
+    const monthRange = scheduleMonthRange(scheduleMonth);
     scheduleLoading.hidden = false;
     scheduleNoClub.hidden = true;
     scheduleWorkspace.hidden = true;
@@ -1315,7 +1472,8 @@
         'id, club_id, title, description, venue, starts_at, ends_at, capacity, confirmed_count, waiting_count, registration_deadline, cancellation_deadline, status, cancellation_reason, published_at, cancelled_at, created_at, updated_at',
       )
       .eq('club_id', membership.club_id)
-      .gte('starts_at', new Date().toISOString())
+      .gte('starts_at', monthRange.startsAt)
+      .lt('starts_at', monthRange.endsAt)
       .order('starts_at', { ascending: true });
 
     if (error) {
@@ -1325,13 +1483,25 @@
 
     scheduledEvents = data;
     selectedEventId = '';
+    if (!selectedScheduleDate || selectedScheduleDate.slice(0, 7) !== scheduleMonth) {
+      const today = currentKoreanDate();
+      selectedScheduleDate = today.slice(0, 7) === scheduleMonth
+        ? today
+        : scheduledEvents[0]
+          ? koreanDateKey(scheduledEvents[0].starts_at)
+          : `${scheduleMonth}-01`;
+    }
+    renderScheduleCalendar();
     renderScheduleList();
     scheduleLoading.hidden = true;
     scheduleWorkspace.hidden = false;
     showEventList();
+    if (options.focusCalendarDate) {
+      calendarGrid.querySelector(`[data-calendar-date="${selectedScheduleDate}"]`)?.focus();
+    }
   }
 
-  function openEventForm(scheduleEvent = null) {
+  function openEventForm(scheduleEvent = null, preferredDate = '') {
     if (!canManageSchedule()) return;
     eventForm.reset();
     eventFormStatus.textContent = '';
@@ -1354,11 +1524,20 @@
       eventForm.elements.capacity.value = scheduleEvent.capacity;
       eventForm.elements.description.value = scheduleEvent.description || '';
     } else {
-      const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const preferredStart = /^\d{4}-\d{2}-\d{2}$/.test(preferredDate)
+        ? new Date(`${preferredDate}T20:00:00+09:00`)
+        : null;
+      const startsAt = preferredStart && preferredStart.getTime() > Date.now() + 2 * 60 * 60 * 1000
+        ? preferredStart
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       startsAt.setUTCMinutes(0, 0, 0);
       const endsAt = new Date(startsAt.getTime() + 2 * 60 * 60 * 1000);
-      const registrationDeadline = new Date(startsAt.getTime() - 24 * 60 * 60 * 1000);
-      const cancellationDeadline = new Date(startsAt.getTime() - 6 * 60 * 60 * 1000);
+      const registrationDeadline = new Date(
+        Math.max(startsAt.getTime() - 24 * 60 * 60 * 1000, Date.now() + 30 * 60 * 1000),
+      );
+      const cancellationDeadline = new Date(
+        Math.max(startsAt.getTime() - 6 * 60 * 60 * 1000, registrationDeadline.getTime() + 30 * 60 * 1000),
+      );
       eventForm.elements.startsAt.value = toKoreanDateTimeLocal(startsAt);
       eventForm.elements.endsAt.value = toKoreanDateTimeLocal(endsAt);
       eventForm.elements.registrationDeadline.value = toKoreanDateTimeLocal(registrationDeadline);
@@ -1422,8 +1601,11 @@
     }
 
     const savedEventId = eventId || data;
+    const savedDate = eventForm.elements.startsAt.value.slice(0, 10);
+    scheduleMonth = savedDate.slice(0, 7);
+    selectedScheduleDate = savedDate;
     await loadSchedule(activeClub);
-    showEventDetail(savedEventId);
+    await showEventDetail(savedEventId);
     showToast(eventId ? '일정 변경을 저장했습니다.' : '일정을 임시 저장했습니다.');
   }
 
@@ -2051,7 +2233,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.0.1';
+    element.textContent = config?.appVersion || '1.1.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2091,7 +2273,28 @@
     copyText(document.querySelector('[data-new-invite-code]').textContent);
   });
   rotateInviteButton?.addEventListener('click', rotateInviteCode);
-  createEventButton?.addEventListener('click', () => openEventForm());
+  createEventButton?.addEventListener('click', () => {
+    const preferredDate = selectedScheduleDate >= currentKoreanDate() ? selectedScheduleDate : '';
+    openEventForm(null, preferredDate);
+  });
+  createEventForDateButton?.addEventListener('click', () => {
+    if (selectedScheduleDate >= currentKoreanDate()) openEventForm(null, selectedScheduleDate);
+  });
+  document.querySelector('[data-calendar-previous]')?.addEventListener('click', async () => {
+    scheduleMonth = shiftMonth(scheduleMonth, -1);
+    selectedScheduleDate = '';
+    await loadSchedule(activeClub);
+  });
+  document.querySelector('[data-calendar-next]')?.addEventListener('click', async () => {
+    scheduleMonth = shiftMonth(scheduleMonth, 1);
+    selectedScheduleDate = '';
+    await loadSchedule(activeClub);
+  });
+  document.querySelector('[data-calendar-today]')?.addEventListener('click', async () => {
+    selectedScheduleDate = currentKoreanDate();
+    scheduleMonth = selectedScheduleDate.slice(0, 7);
+    await loadSchedule(activeClub, { focusCalendarDate: true });
+  });
   eventForm?.addEventListener('submit', saveEvent);
   document.querySelector('[data-event-form-cancel]')?.addEventListener('click', closeEventForm);
   document.querySelector('[data-event-back]')?.addEventListener('click', showEventList);
