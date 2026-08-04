@@ -1636,6 +1636,79 @@ button {
   margin-top: 0;
 }
 
+.account-panel {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px;
+  background: #fff8f6;
+  border: 1px solid #e5c5bf;
+  border-radius: var(--radius-medium);
+}
+
+.account-panel h2 {
+  margin: 8px 0 10px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.account-panel p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.account-panel p.is-error {
+  color: #a7392b;
+  font-weight: 700;
+}
+
+.account-panel a {
+  display: inline-flex;
+  margin-top: 12px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-panel .danger-button {
+  flex: 0 0 auto;
+}
+
+.privacy-content {
+  display: grid;
+  gap: 1px;
+  margin-top: 54px;
+  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+}
+
+.privacy-content section,
+.privacy-updated {
+  padding: 28px;
+  background: var(--paper);
+}
+
+.privacy-content h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.privacy-content p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.privacy-content .privacy-updated {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .profile-summary-copy {
   flex: 1;
   min-width: 0;
@@ -2060,6 +2133,10 @@ button {
     margin-top: 38px;
   }
 
+  .account-panel {
+    align-items: flex-start;
+  }
+
   .profile-details,
   .form-grid {
     grid-template-columns: 1fr;
@@ -2154,6 +2231,14 @@ button {
 @media (max-width: 480px) {
   .profile-preview {
     flex-direction: column;
+  }
+
+  .account-panel {
+    display: grid;
+  }
+
+  .account-panel .danger-button {
+    width: 100%;
   }
 
   .attendance-heading {

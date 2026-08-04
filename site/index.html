@@ -44,7 +44,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.9.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>1.0.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -609,6 +609,52 @@
               <button class="save-button" type="submit" data-profile-save>저장하기</button>
             </div>
           </form>
+
+          <section class="account-panel" aria-labelledby="account-management-title">
+            <div>
+              <p class="eyebrow">ACCOUNT &amp; PRIVACY</p>
+              <h2 id="account-management-title">계정과 개인정보</h2>
+              <p data-account-deletion-status>
+                계정 삭제를 요청하면 클럽 접근과 참가 활동이 즉시 중단됩니다.
+              </p>
+              <a href="#privacy">개인정보 처리 안내 보기</a>
+            </div>
+            <button class="danger-button" type="button" data-request-account-deletion>
+              계정 삭제 요청
+            </button>
+          </section>
+        </div>
+      </section>
+
+      <section class="view content-view privacy-view" data-view="privacy" aria-labelledby="privacy-title" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">PRIVACY</p>
+          <h1 id="privacy-title">개인정보 처리 안내</h1>
+          <p>비공개 축구 모임 운영에 필요한 최소 정보와 계정 삭제 절차를 안내합니다.</p>
+        </div>
+
+        <div class="privacy-content">
+          <section>
+            <h2>수집하는 정보</h2>
+            <p>Google 계정 식별자와 이메일, 이름 또는 닉네임, 나이, 선택 프로필, 프로필 사진, 클럽 역할, 일정 응답, 출석과 관리 작업 기록을 처리합니다.</p>
+          </section>
+          <section>
+            <h2>이용 목적과 공개 범위</h2>
+            <p>회원 확인, 비공개 클럽 운영, 일정·참가·출석·공지 관리에 사용합니다. 이메일은 다른 회원에게 공개하지 않으며 공개 프로필과 활동 현황은 같은 클럽의 활성 회원에게만 표시합니다.</p>
+          </section>
+          <section>
+            <h2>외부 서비스</h2>
+            <p>Google은 로그인을, Supabase는 인증·데이터베이스·파일 저장을, GitHub Pages는 공개 정적 화면 배포를 담당합니다. 서비스 역할 키와 OAuth 비밀값은 브라우저에 저장하지 않습니다.</p>
+          </section>
+          <section>
+            <h2>보관과 삭제</h2>
+            <p>회원 데이터는 계정과 클럽 운영 중 보관합니다. 삭제 요청 시 클럽 접근을 즉시 중단하고 감사 기록의 회원 이름과 식별자를 익명화합니다. 운영자는 프로필 사진을 Storage API로 제거한 뒤 Supabase Auth 계정을 최종 삭제합니다.</p>
+          </section>
+          <section>
+            <h2>계정 삭제 요청</h2>
+            <p><strong>내 정보 → 계정 삭제 요청</strong>을 사용합니다. 총관리자는 클럽 소유권을 먼저 정리해야 합니다. 요청 후 복구가 필요하면 Auth 계정이 최종 삭제되기 전에 클럽 운영자에게 문의해야 합니다.</p>
+          </section>
+          <p class="privacy-updated">시행 및 최종 수정: 2026년 8월 4일</p>
         </div>
       </section>
 
@@ -626,7 +672,7 @@
             Google로 계속하기
           </button>
           <p class="login-notice">
-            로그인하면 KFC Football Club의 개인정보 처리 안내와 이용 규칙에 동의한 것으로 봅니다.
+            로그인하면 KFC Football Club의 <a href="#privacy">개인정보 처리 안내</a>와 이용 규칙에 동의한 것으로 봅니다.
           </p>
         </div>
       </section>

@@ -8,7 +8,7 @@
   const PROFILE_IMAGE_SIZE = 512;
   const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
   const defaultRoute = 'home';
-  const publicRoutes = new Set(['home', 'login']);
+  const publicRoutes = new Set(['home', 'login', 'privacy']);
   const views = Array.from(document.querySelectorAll('[data-view]'));
   const routeLinks = Array.from(document.querySelectorAll('[data-route-link]'));
   const knownRoutes = new Set(views.map((view) => view.dataset.view));
@@ -27,6 +27,8 @@
   const profileFormStatus = document.querySelector('[data-profile-form-status]');
   const profileBioInput = document.querySelector('[data-profile-bio-input]');
   const profileBioCount = document.querySelector('[data-profile-bio-count]');
+  const accountDeletionStatus = document.querySelector('[data-account-deletion-status]');
+  const requestAccountDeletionButton = document.querySelector('[data-request-account-deletion]');
   const clubLoading = document.querySelector('[data-club-loading]');
   const clubOnboarding = document.querySelector('[data-club-onboarding]');
   const clubDashboard = document.querySelector('[data-club-dashboard]');
@@ -191,11 +193,14 @@
 
   function renderProfile(profile, email, avatarUrl) {
     const completed = Number.isInteger(profile.age);
+    const deletionRequested = profile.account_status === 'deletion_requested';
     currentProfile = profile;
     currentAvatarUrl = avatarUrl;
-    document.querySelector('[data-profile-status]').textContent = completed
-      ? '프로필 등록 완료'
-      : '프로필 작성 필요';
+    document.querySelector('[data-profile-status]').textContent = deletionRequested
+      ? '계정 삭제 처리 중'
+      : completed
+        ? '프로필 등록 완료'
+        : '프로필 작성 필요';
     document.querySelector('[data-profile-name]').textContent = profile.display_name;
     document.querySelector('[data-profile-email]').textContent = email || '이메일 정보 없음';
     document.querySelector('[data-profile-age]').textContent = completed ? `${profile.age}세` : '—';
@@ -207,9 +212,15 @@
     document.querySelector('[data-profile-bio]').textContent =
       profile.bio || '자기소개를 등록해 보세요.';
     setProfileAvatars(avatarUrl, avatarUrl, profile.display_name);
-    profileEditButton.disabled = false;
+    profileEditButton.disabled = deletionRequested;
+    requestAccountDeletionButton.hidden = deletionRequested;
+    requestAccountDeletionButton.disabled = false;
+    accountDeletionStatus.classList.remove('is-error');
+    accountDeletionStatus.textContent = deletionRequested
+      ? `${formatKoreanDateTime(profile.deletion_requested_at)}에 삭제를 요청했습니다. 클럽 접근은 중단되었으며 운영자가 최종 삭제를 처리합니다.`
+      : '계정 삭제를 요청하면 클럽 접근과 참가 활동이 즉시 중단됩니다.';
 
-    if (!completed) {
+    if (!completed && !deletionRequested) {
       openProfileForm();
     }
   }
@@ -229,6 +240,10 @@
     document.querySelector('[data-profile-bio]').textContent = '자기소개를 등록해 보세요.';
     setProfileAvatars('', '', 'K');
     profileEditButton.disabled = true;
+    requestAccountDeletionButton.hidden = false;
+    requestAccountDeletionButton.disabled = true;
+    accountDeletionStatus.textContent = '로그인 후 계정과 개인정보 설정을 확인할 수 있습니다.';
+    accountDeletionStatus.classList.remove('is-error');
     profileForm.hidden = true;
   }
 
@@ -252,7 +267,7 @@
     const { data, error } = await supabaseClient
       .from('profiles')
       .select(
-        'display_name, age, avatar_url, avatar_path, use_default_avatar, preferred_position, preferred_foot, shirt_number, bio',
+        'display_name, age, avatar_url, avatar_path, use_default_avatar, preferred_position, preferred_foot, shirt_number, bio, account_status, deletion_requested_at',
       )
       .eq('id', user.id)
       .single();
@@ -487,6 +502,33 @@
     }
   }
 
+  async function requestAccountDeletion() {
+    if (!session?.user || currentProfile?.account_status === 'deletion_requested') return;
+    const confirmed = window.confirm(
+      '계정 삭제를 요청하면 클럽 접근과 참가 활동이 즉시 중단되고 자동으로 로그아웃됩니다. 계속할까요?',
+    );
+    if (!confirmed) return;
+
+    requestAccountDeletionButton.disabled = true;
+    accountDeletionStatus.textContent = '계정 삭제 요청을 안전하게 처리하고 있습니다.';
+    accountDeletionStatus.classList.remove('is-error');
+    const { error } = await supabaseClient.rpc('request_account_deletion');
+    if (error) {
+      requestAccountDeletionButton.disabled = false;
+      accountDeletionStatus.textContent = error.message;
+      accountDeletionStatus.classList.add('is-error');
+      return;
+    }
+
+    const { error: signOutError } = await supabaseClient.auth.signOut();
+    window.location.hash = 'home';
+    showToast(
+      signOutError
+        ? '삭제 요청은 완료됐지만 로그아웃하지 못했습니다. 직접 로그아웃해 주세요.'
+        : '계정 삭제 요청을 접수하고 클럽 접근을 중단했습니다.',
+    );
+  }
+
   function roleLabel(role) {
     return { owner: '총관리자', admin: '관리자', member: '회원' }[role] || '회원';
   }
@@ -558,6 +600,13 @@
     showScheduleNoClub();
     showAttendanceNoClub();
     showAnnouncementsNoClub();
+    if (currentProfile?.account_status === 'deletion_requested') {
+      clubLoading.hidden = false;
+      clubLoading.lastChild.textContent = ' 계정 삭제 요청으로 클럽 접근이 중단되었습니다.';
+      clubDashboard.hidden = true;
+      clubOnboarding.hidden = true;
+      return;
+    }
     clubLoading.hidden = true;
     clubDashboard.hidden = true;
     clubOnboarding.hidden = false;
@@ -668,6 +717,7 @@
       announcement_created: '공지 작성',
       announcement_updated: '공지 수정',
       announcement_archived: '공지 보관',
+      account_deletion_requested: '계정 삭제 요청',
     }[action] || '관리 작업';
   }
 
@@ -713,6 +763,9 @@
     }
     if (entry.action === 'announcement_archived') {
       return `${entry.actor_display_name}님이 ${entry.target_display_name} 공지를 보관했습니다.`;
+    }
+    if (entry.action === 'account_deletion_requested') {
+      return '탈퇴 회원의 계정 삭제 요청이 접수되었습니다.';
     }
     return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
   }
@@ -1998,7 +2051,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.9.0';
+    element.textContent = config?.appVersion || '1.0.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2008,6 +2061,7 @@
   profilePhotoInput?.addEventListener('change', handleProfilePhoto);
   profilePhotoRemoveButton?.addEventListener('click', useDefaultProfileAvatar);
   profileForm?.addEventListener('submit', saveProfile);
+  requestAccountDeletionButton?.addEventListener('click', requestAccountDeletion);
   profileBioInput?.addEventListener('input', () => {
     profileBioCount.textContent = profileBioInput.value.length;
   });

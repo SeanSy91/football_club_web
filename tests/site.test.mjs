@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.9.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.0.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.9\.0</);
-  assert.match(config, /appVersion: '0\.9\.0'/);
-  assert.match(readme, /`0\.9\.0`/);
+  assert.match(html, /data-app-version>1\.0\.0</);
+  assert.match(config, /appVersion: '1\.0\.0'/);
+  assert.match(readme, /`1\.0\.0`/);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
@@ -506,4 +506,66 @@ test('운영 문서는 백업, Storage 분리 보관과 안전한 복구 절차�
   assert.match(operations, /사용자 승인 없이 실행하지 않는다/);
   assert.match(operations, /Asia\/Seoul/);
   assert.match(gitignore, /^backups\/$/m);
+});
+
+test('개인정보 안내는 로그인 전에도 접근 가능하고 계정 삭제 요청 화면을 제공한다', async () => {
+  const [html, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-view="privacy"/);
+  assert.match(html, /id="privacy-title"/);
+  assert.match(html, /href="#privacy"/);
+  assert.match(html, /data-account-deletion-status/);
+  assert.match(html, /data-request-account-deletion/);
+  assert.match(script, /publicRoutes = new Set\(\['home', 'login', 'privacy'\]\)/);
+});
+
+test('계정 삭제 클라이언트는 서버 함수 요청 후 로그아웃하고 관리자 비밀 키를 사용하지 않는다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /rpc\('request_account_deletion'\)/);
+  assert.match(script, /auth\.signOut\(\)/);
+  assert.match(script, /account_status === 'deletion_requested'/);
+  assert.doesNotMatch(script, /auth\.admin/);
+  assert.doesNotMatch(script, /service_role/i);
+});
+
+test('계정 삭제 마이그레이션은 요청자 격리, 소유자 보호와 Auth 삭제 준비를 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040010_add_account_deletion_requests.sql',
+  );
+
+  assert.match(migration, /account_status in \('active', 'deletion_requested'\)/);
+  assert.match(migration, /create table if not exists public\.account_deletion_requests/);
+  assert.match(migration, /alter table public\.account_deletion_requests enable row level security/);
+  assert.match(migration, /user_id = \(select auth\.uid\(\)\)/);
+  assert.match(migration, /create or replace function public\.request_account_deletion/);
+  assert.match(migration, /c\.owner_id = v_user_id and c\.status = 'active'/);
+  assert.match(migration, /status = 'removed'/);
+  assert.match(migration, /account_status = 'deletion_requested'/);
+  assert.match(migration, /actor_display_name = '탈퇴 회원'/);
+  assert.match(migration, /target_id = 'deleted-account'/);
+  assert.match(migration, /create trigger club_members_require_active_account/);
+  assert.match(migration, /on delete set null/);
+  assert.match(migration, /grant execute on function public\.request_account_deletion\(\) to authenticated/);
+  assert.doesNotMatch(migration, /delete\s+from\s+auth\.users/i);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.account_deletion_requests/i);
+});
+
+test('개인정보와 운영 문서는 Storage 선삭제, Auth 최종 삭제와 사용량 확인을 안내한다', async () => {
+  const [privacy, operations] = await Promise.all([
+    readProjectFile('docs/privacy.md'),
+    readProjectFile('docs/operations.md'),
+  ]);
+
+  assert.match(privacy, /Storage API 또는 Dashboard로 프로필 사진을 삭제/);
+  assert.match(privacy, /Authentication → Users/);
+  assert.match(privacy, /storage\.objects/);
+  assert.match(operations, /account_deletion_requests/);
+  assert.match(operations, /Database Size/);
+  assert.match(operations, /Storage Size/);
+  assert.match(operations, /Monthly Active Users/);
+  assert.match(operations, /Edge Function/);
 });

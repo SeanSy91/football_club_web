@@ -103,3 +103,34 @@ Get-FileHash (Join-Path $backupDir 'schema.sql'), (Join-Path $backupDir 'data.sq
 - 만료된 공지와 오래된 테스트 일정
 - 백업 파일 생성일, 크기와 해시
 - 일반 회원 계정에서 관리 기능이 숨겨지고 서버에서도 거부되는지 여부
+
+## 9. 계정 삭제 요청 처리
+
+사용자의 요청 직후 클럽 접근은 중단되지만 Auth 계정과 Storage 파일은 운영자가 최종 정리해야 한다.
+
+1. Supabase Dashboard의 **Table Editor → account_deletion_requests**에서 `pending` 요청을 확인한다.
+2. `avatar_path`가 있으면 **Storage → profile-images**에서 해당 `<user-id>/avatar.webp` 파일을 삭제한다.
+3. Storage 파일이 사라졌는지 확인한다. SQL Editor에서 `storage.objects` 행을 직접 삭제하지 않는다.
+4. **Authentication → Users**에서 같은 `user_id`의 사용자를 삭제한다.
+5. `profiles`, `club_members`, `account_deletion_requests`에서 해당 사용자 행이 사라졌는지 확인한다.
+6. 일정·공지·출석의 작성자 참조가 `null`로 정리되고 감사 기록은 `탈퇴 회원`으로 남는지 확인한다.
+
+총관리자의 요청은 서버에서 거부된다. 클럽 소유권 이전 기능이 마련되기 전에는 운영 데이터 보존 여부를 별도로 결정하고 새 마이그레이션으로 처리한다.
+
+## 10. 사용량 확인
+
+매월 첫째 주와 운영 회원이 크게 늘어난 날에 Supabase Dashboard의 조직 **Usage** 화면을 확인한다. 프로젝트 필터에서 KFC 프로젝트를 선택하고 다음 값을 기록한다.
+
+- Database Size
+- Storage Size
+- Egress
+- Monthly Active Users
+- Realtime 메시지와 연결 수: 현재 앱은 Realtime을 사용하지 않으므로 증가하면 원인을 확인한다.
+- Edge Function 호출 수: 현재 앱은 Edge Function을 사용하지 않으므로 0에 가까워야 한다.
+
+GitHub 저장소의 **Actions**에서 불필요한 반복 배포가 없는지 확인하고 **Settings → Billing**에서 Actions 사용량을 확인한다. 정적 Pages 배포와 소규모 클럽 운영 범위를 벗어난 증가가 있으면 기능 추가보다 원인 확인을 우선한다.
+
+관련 공식 문서:
+
+- [Supabase Manage your usage](https://supabase.com/docs/guides/platform/manage-your-usage)
+- [Supabase Billing](https://supabase.com/docs/guides/platform/billing-on-supabase)

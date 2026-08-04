@@ -157,3 +157,20 @@ SQL 실행 후 총관리자 계정으로 클럽 화면을 새로고침한다. �
 - 공지 관리 작업을 총관리자 감사 기록에 남기는 처리
 
 일반 회원은 임시 저장, 공개 예정, 게시 종료, 보관 공지를 조회할 수 없다. 클라이언트는 공지 테이블을 직접 변경하지 않고 `create_announcement`, `update_announcement`, `archive_announcement` 함수만 호출한다.
+
+## 12. 계정 삭제 요청
+
+`v1.0.0`에 적용하려면 SQL Editor에서
+`supabase/migrations/202608040010_add_account_deletion_requests.sql`을 실행한다.
+
+이 마이그레이션은 다음 항목을 설정한다.
+
+- 계정 삭제 요청 상태와 요청 시각
+- 본인 요청만 조회할 수 있는 `account_deletion_requests` 테이블과 RLS
+- 총관리자의 실수로 인한 클럽 소유권 유실 방지
+- 요청 회원의 클럽 접근 중단과 향후 참가·가입 차단
+- 향후 참가 취소와 대기 회원 자동 승급 트리거 재사용
+- 감사 기록의 회원 이름과 식별자 익명화
+- Auth 계정 삭제 때 일정·공지·출석 작성자 참조를 `null`로 정리하는 외래 키
+
+정적 사이트는 서비스 역할 키를 사용하지 않는다. 최종 삭제는 `docs/operations.md`의 절차에 따라 프로필 사진을 Storage에서 먼저 제거하고 Supabase Dashboard의 **Authentication → Users**에서 처리한다.
