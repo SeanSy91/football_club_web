@@ -43,7 +43,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.7.1</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.8.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -381,15 +381,52 @@
       </section>
 
       <section class="view content-view" data-view="attendance" aria-labelledby="attendance-title" hidden>
-        <div class="section-heading">
-          <p class="eyebrow">ATTENDANCE</p>
-          <h1 id="attendance-title">참석 현황</h1>
-          <p>월별 출석과 결석 기록을 회원에게 투명하게 공개합니다.</p>
+        <div class="attendance-heading">
+          <div class="section-heading">
+            <p class="eyebrow">ATTENDANCE</p>
+            <h1 id="attendance-title">참석 현황</h1>
+            <p>일정별 출석 결과와 월별 참석 횟수를 모든 회원에게 공개합니다.</p>
+          </div>
+          <label class="month-filter">
+            <span>조회 월</span>
+            <input type="month" data-attendance-month />
+          </label>
         </div>
-        <div class="metric-grid">
-          <article><strong>0</strong><span>이번 달 참석</span></article>
-          <article><strong>0</strong><span>예정 경기</span></article>
-          <article><strong>—</strong><span>출석률</span></article>
+
+        <div class="schedule-loading" data-attendance-loading role="status">
+          <span class="loading-dot" aria-hidden="true"></span>
+          <span>출석 현황을 확인하고 있습니다.</span>
+        </div>
+        <div class="empty-state" data-attendance-no-club hidden>
+          <span aria-hidden="true">KFC</span>
+          <h2>먼저 클럽에 가입해 주세요</h2>
+          <p>출석 결과는 같은 클럽의 회원에게만 공개됩니다.</p>
+        </div>
+        <div data-attendance-workspace hidden>
+          <div class="metric-grid attendance-metrics">
+            <article><strong data-my-attended-count>0</strong><span>내 월간 참석</span></article>
+            <article><strong data-my-late-count>0</strong><span>내 지각</span></article>
+            <article><strong data-my-attendance-rate>—</strong><span>내 출석률</span></article>
+          </div>
+
+          <section class="attendance-board" aria-labelledby="monthly-board-title">
+            <div class="member-section-heading">
+              <div><p class="eyebrow">MONTHLY</p><h2 id="monthly-board-title">월별 회원 현황</h2></div>
+            </div>
+            <div class="attendance-table" data-monthly-attendance-list></div>
+          </section>
+
+          <section class="attendance-board" aria-labelledby="event-attendance-title">
+            <div class="member-section-heading">
+              <div><p class="eyebrow">EVENT RESULT</p><h2 id="event-attendance-title">일정별 출석 결과</h2></div>
+            </div>
+            <label class="form-field attendance-event-select">
+              <span>종료되었거나 시작된 일정</span>
+              <select data-attendance-event></select>
+            </label>
+            <p class="form-status" role="status" aria-live="polite" data-attendance-status></p>
+            <div class="attendance-roster" data-attendance-roster></div>
+          </section>
         </div>
       </section>
 

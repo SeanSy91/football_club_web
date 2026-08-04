@@ -1342,6 +1342,97 @@ button {
   font-weight: 700;
 }
 
+.attendance-heading {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.month-filter {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.month-filter input {
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--ink);
+  font: inherit;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.attendance-board {
+  margin-top: 38px;
+  padding: 30px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+}
+
+.attendance-table,
+.attendance-roster {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.attendance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, minmax(55px, auto));
+  gap: 12px;
+  align-items: center;
+  padding: 13px 15px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.attendance-row strong {
+  font-size: 12px;
+}
+
+.attendance-row span {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.attendance-control {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto;
+  gap: 8px;
+}
+
+.attendance-control select,
+.attendance-control button,
+.attendance-event-select select {
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--green);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.attendance-control button {
+  cursor: pointer;
+}
+
+.attendance-event-select {
+  max-width: 520px;
+  margin-top: 18px;
+}
+
 .profile-preview {
   display: flex;
   gap: 24px;
@@ -1767,6 +1858,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .attendance-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .feature-grid article {
     min-height: 0;
     padding: 28px 4px;
@@ -1890,6 +1985,15 @@ button {
 @media (max-width: 480px) {
   .profile-preview {
     flex-direction: column;
+  }
+
+  .attendance-heading {
+    display: grid;
+    align-items: start;
+  }
+
+  .attendance-row {
+    grid-template-columns: 1fr;
   }
 
   .profile-summary-copy {

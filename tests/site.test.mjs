@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.7.1 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v0.8.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.7\.1</);
-  assert.match(config, /appVersion: '0\.7\.1'/);
-  assert.match(readme, /`0\.7\.1`/);
+  assert.match(html, /data-app-version>0\.8\.0</);
+  assert.match(config, /appVersion: '0\.8\.0'/);
+  assert.match(readme, /`0\.8\.0`/);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
@@ -360,4 +360,55 @@ test('회원 명단은 겹친 조회의 이전 응답을 버리고 사용자 ID�
   assert.match(script, /document\.createDocumentFragment\(\)/);
   assert.match(script, /directory\.replaceChildren\(fragment\)/);
   assert.match(script, /uniqueMembers\.length/);
+});
+
+test('출석 화면은 월별 요약과 일정별 출석부를 접근 가능한 상태로 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-view="attendance"/);
+  assert.match(html, /type="month" data-attendance-month/);
+  assert.match(html, /data-monthly-attendance-list/);
+  assert.match(html, /data-my-attended-count/);
+  assert.match(html, /data-my-late-count/);
+  assert.match(html, /data-my-attendance-rate/);
+  assert.match(html, /data-attendance-event/);
+  assert.match(html, /aria-live="polite" data-attendance-status/);
+  assert.match(html, /data-attendance-roster/);
+});
+
+test('출석 클라이언트는 공개 뷰를 조회하고 서버 함수로만 상태를 변경한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /\.from\('monthly_attendance_stats'\)/);
+  assert.match(script, /\.from\('attendance_record_profiles'\)/);
+  assert.match(script, /\.rpc\('set_attendance'/);
+  assert.match(script, /attendanceMonth\?\.addEventListener\('change'/);
+  assert.match(script, /attendanceEventSelect\?\.addEventListener\('change'/);
+  assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.insert/);
+  assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.update/);
+  assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.delete/);
+});
+
+test('출석 마이그레이션은 역할과 시작 시각, 상태, RLS를 서버에서 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040008_create_attendance.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.attendance_records/);
+  assert.match(migration, /primary key \(event_id, user_id\)/);
+  assert.match(migration, /status in \('attended', 'late', 'absent', 'excused'\)/);
+  assert.match(migration, /alter table public\.attendance_records enable row level security/);
+  assert.match(migration, /revoke all on table public\.attendance_records from anon, authenticated/);
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /create or replace view public\.monthly_attendance_stats/);
+  assert.match(migration, /time zone 'Asia\/Seoul'/);
+  assert.match(migration, /ar\.status in \('attended', 'late'\)/);
+  assert.match(migration, /ar\.status <> 'excused'/);
+  assert.match(migration, /create or replace function public\.set_attendance/);
+  assert.match(migration, /private\.can_manage_club\(v_event\.club_id, v_actor_user_id\)/);
+  assert.match(migration, /now\(\) < v_event\.starts_at/);
+  assert.match(migration, /cm\.status = 'active'/);
+  assert.match(migration, /'attendance_updated'/);
+  assert.match(migration, /grant execute on function public\.set_attendance\(uuid, uuid, text\) to authenticated/);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.attendance_records/i);
 });

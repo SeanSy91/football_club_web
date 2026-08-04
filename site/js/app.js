@@ -57,6 +57,12 @@
   const applyEventButton = document.querySelector('[data-apply-event]');
   const absentEventButton = document.querySelector('[data-absent-event]');
   const cancelParticipationButton = document.querySelector('[data-cancel-participation]');
+  const attendanceLoading = document.querySelector('[data-attendance-loading]');
+  const attendanceNoClub = document.querySelector('[data-attendance-no-club]');
+  const attendanceWorkspace = document.querySelector('[data-attendance-workspace]');
+  const attendanceMonth = document.querySelector('[data-attendance-month]');
+  const attendanceEventSelect = document.querySelector('[data-attendance-event]');
+  const attendanceStatus = document.querySelector('[data-attendance-status]');
   const config = window.KFC_CONFIG;
   let authReady = false;
   let session = null;
@@ -69,6 +75,7 @@
   let activeClubMembers = [];
   let scheduledEvents = [];
   let eventResponses = [];
+  let attendanceEvents = [];
   let selectedEventId = '';
   let memberDirectoryLoadId = 0;
   let toastTimer;
@@ -521,6 +528,7 @@
     activeClub = null;
     activeClubMembers = [];
     memberDirectoryLoadId += 1;
+    resetAttendance();
     resetSchedule();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
@@ -535,6 +543,7 @@
   function showClubOnboarding() {
     activeClub = null;
     showScheduleNoClub();
+    showAttendanceNoClub();
     clubLoading.hidden = true;
     clubDashboard.hidden = true;
     clubOnboarding.hidden = false;
@@ -641,6 +650,7 @@
       event_published: '일정 공개',
       event_cancelled: '일정 취소',
       participant_status_changed: '참가자 상태 변경',
+      attendance_updated: '출석 상태 변경',
     }[action] || '관리 작업';
   }
 
@@ -674,6 +684,9 @@
     }
     if (entry.action === 'participant_status_changed') {
       return `${entry.actor_display_name}님이 ${entry.target_display_name}님의 참가 상태를 변경했습니다.`;
+    }
+    if (entry.action === 'attendance_updated') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name}님의 출석 상태를 변경했습니다.`;
     }
     return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
   }
@@ -792,6 +805,7 @@
     }
 
     await loadSchedule(membership);
+    await loadAttendance(membership);
   }
 
   function canManageSchedule(membership = activeClub) {
@@ -1379,6 +1393,189 @@
     showToast('일정을 취소했습니다.');
   }
 
+  function currentKoreanMonth() {
+    return toKoreanDateTimeLocal(new Date()).slice(0, 7);
+  }
+
+  function attendanceLabel(status) {
+    return {
+      attended: '출석',
+      late: '지각',
+      absent: '결석',
+      excused: '사유 인정',
+      unmarked: '미체크',
+    }[status] || '미체크';
+  }
+
+  function resetAttendance() {
+    attendanceEvents = [];
+    attendanceLoading.hidden = false;
+    attendanceNoClub.hidden = true;
+    attendanceWorkspace.hidden = true;
+    attendanceEventSelect.replaceChildren();
+    attendanceStatus.textContent = '';
+    attendanceStatus.classList.remove('is-error');
+    document.querySelector('[data-monthly-attendance-list]').replaceChildren();
+    document.querySelector('[data-attendance-roster]').replaceChildren();
+  }
+
+  function showAttendanceNoClub() {
+    attendanceEvents = [];
+    attendanceLoading.hidden = true;
+    attendanceWorkspace.hidden = true;
+    attendanceNoClub.hidden = false;
+  }
+
+  function renderMonthlyAttendance(stats) {
+    const list = document.querySelector('[data-monthly-attendance-list]');
+    list.replaceChildren();
+    const statsByUser = new Map(stats.map((row) => [row.user_id, row]));
+    activeClubMembers.forEach(({ member }) => {
+      const stat = statsByUser.get(member.user_id) || {};
+      const row = document.createElement('div');
+      row.className = 'attendance-row';
+      const name = document.createElement('strong');
+      name.textContent = member.display_name;
+      const attended = document.createElement('span');
+      attended.textContent = `참석 ${(stat.attended_count || 0) + (stat.late_count || 0)}`;
+      const late = document.createElement('span');
+      late.textContent = `지각 ${stat.late_count || 0}`;
+      const absent = document.createElement('span');
+      absent.textContent = `결석 ${stat.absent_count || 0}`;
+      const rate = document.createElement('span');
+      rate.textContent = stat.attendance_rate == null ? '출석률 —' : `출석률 ${stat.attendance_rate}%`;
+      row.append(name, attended, late, absent, rate);
+      list.append(row);
+    });
+
+    const mine = statsByUser.get(session.user.id) || {};
+    document.querySelector('[data-my-attended-count]').textContent =
+      (mine.attended_count || 0) + (mine.late_count || 0);
+    document.querySelector('[data-my-late-count]').textContent = mine.late_count || 0;
+    document.querySelector('[data-my-attendance-rate]').textContent =
+      mine.attendance_rate == null ? '—' : `${mine.attendance_rate}%`;
+  }
+
+  function createAttendanceRow(memberEntry, record) {
+    const row = document.createElement('div');
+    row.className = 'attendance-row';
+    const name = document.createElement('strong');
+    name.textContent = memberEntry.member.display_name;
+    row.append(name);
+    if (!canManageSchedule()) {
+      const result = document.createElement('span');
+      result.textContent = attendanceLabel(record?.status || 'unmarked');
+      row.append(result);
+      return row;
+    }
+
+    const control = document.createElement('div');
+    control.className = 'attendance-control';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', `${memberEntry.member.display_name}님의 출석 상태`);
+    ['unmarked', 'attended', 'late', 'absent', 'excused'].forEach((status) => {
+      const option = document.createElement('option');
+      option.value = status;
+      option.textContent = attendanceLabel(status);
+      option.selected = status === (record?.status || 'unmarked');
+      select.append(option);
+    });
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.textContent = '저장';
+    save.addEventListener('click', () => saveAttendance(memberEntry.member.user_id, select.value, save));
+    control.append(select, save);
+    row.append(control);
+    return row;
+  }
+
+  async function loadAttendanceRecords() {
+    const eventId = attendanceEventSelect.value;
+    const roster = document.querySelector('[data-attendance-roster]');
+    roster.replaceChildren();
+    if (!eventId) {
+      attendanceStatus.textContent = '출석을 확인할 수 있는 시작된 일정이 없습니다.';
+      return;
+    }
+
+    attendanceStatus.textContent = '일정별 출석 결과를 불러오고 있습니다.';
+    const { data, error } = await supabaseClient
+      .from('attendance_record_profiles')
+      .select('event_id, club_id, user_id, status, checked_at, display_name')
+      .eq('event_id', eventId);
+    if (error) {
+      attendanceStatus.textContent = `출석 결과 오류: ${error.message}`;
+      attendanceStatus.classList.add('is-error');
+      return;
+    }
+    attendanceStatus.textContent = '';
+    attendanceStatus.classList.remove('is-error');
+    const recordsByUser = new Map(data.map((record) => [record.user_id, record]));
+    activeClubMembers.forEach((memberEntry) => {
+      roster.append(createAttendanceRow(memberEntry, recordsByUser.get(memberEntry.member.user_id)));
+    });
+  }
+
+  async function loadAttendance(membership) {
+    if (!membership) {
+      showAttendanceNoClub();
+      return;
+    }
+    if (!attendanceMonth.value) attendanceMonth.value = currentKoreanMonth();
+    attendanceLoading.hidden = false;
+    attendanceNoClub.hidden = true;
+    attendanceWorkspace.hidden = true;
+    attendanceStatus.textContent = '';
+    attendanceStatus.classList.remove('is-error');
+    const previousEventId = attendanceEventSelect.value;
+    const monthStart = `${attendanceMonth.value}-01`;
+    const [statsResult, eventsResult] = await Promise.all([
+      supabaseClient.from('monthly_attendance_stats').select('*').eq('club_id', membership.club_id).eq('month_start', monthStart),
+      supabaseClient.from('events').select('id, title, starts_at').eq('club_id', membership.club_id).eq('status', 'published').lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
+    ]);
+    if (statsResult.error || eventsResult.error) {
+      attendanceLoading.lastChild.textContent = ` 출석 현황 오류: ${(statsResult.error || eventsResult.error).message}`;
+      return;
+    }
+    renderMonthlyAttendance(statsResult.data);
+    attendanceEvents = eventsResult.data;
+    attendanceEventSelect.replaceChildren();
+    if (!attendanceEvents.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = '시작된 일정 없음';
+      attendanceEventSelect.append(option);
+    } else {
+      attendanceEvents.forEach((event) => {
+        const option = document.createElement('option');
+        option.value = event.id;
+        option.textContent = `${formatKoreanDateTime(event.starts_at)} · ${event.title}`;
+        option.selected = event.id === previousEventId;
+        attendanceEventSelect.append(option);
+      });
+    }
+    attendanceLoading.hidden = true;
+    attendanceWorkspace.hidden = false;
+    await loadAttendanceRecords();
+  }
+
+  async function saveAttendance(userId, status, button) {
+    if (!canManageSchedule() || !attendanceEventSelect.value) return;
+    button.disabled = true;
+    const { error } = await supabaseClient.rpc('set_attendance', {
+      p_event_id: attendanceEventSelect.value,
+      p_target_user_id: userId,
+      p_status: status,
+    });
+    button.disabled = false;
+    if (error) {
+      showToast(`출석 저장에 실패했습니다: ${error.message}`);
+      return;
+    }
+    await loadAttendance(activeClub);
+    showToast('출석 상태를 저장했습니다.');
+  }
+
   async function loadClub(user, createdInviteCode = '') {
     resetClub();
     const { data, error } = await supabaseClient
@@ -1536,7 +1733,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.7.1';
+    element.textContent = config?.appVersion || '0.8.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -1585,6 +1782,10 @@
   });
   document.querySelector('[data-publish-event]')?.addEventListener('click', publishSelectedEvent);
   document.querySelector('[data-cancel-event]')?.addEventListener('click', cancelSelectedEvent);
+  attendanceMonth?.addEventListener('change', () => {
+    if (activeClub) loadAttendance(activeClub);
+  });
+  attendanceEventSelect?.addEventListener('change', loadAttendanceRecords);
   applyEventButton?.addEventListener('click', applyToSelectedEvent);
   absentEventButton?.addEventListener('click', setSelectedEventAbsent);
   cancelParticipationButton?.addEventListener('click', cancelSelectedParticipation);
