@@ -1222,7 +1222,11 @@
     item.append(summary);
 
     const selectedScheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
-    if (canManageSchedule() && selectedScheduleEvent?.status === 'published') {
+    if (
+      canManageSchedule()
+      && selectedScheduleEvent?.status === 'published'
+      && Date.now() < new Date(selectedScheduleEvent.starts_at).getTime()
+    ) {
       const controls = document.createElement('div');
       controls.className = 'response-manager-control';
       const select = document.createElement('select');
@@ -1800,6 +1804,18 @@
     attendanceError.hidden = true;
     attendanceStatus.textContent = '';
     attendanceStatus.classList.remove('is-error');
+    if (canManageSchedule(membership)) {
+      const finalizeResult = await supabaseClient.rpc('finalize_club_attendance', {
+        p_club_id: membership.club_id,
+      });
+      if (finalizeResult.error) {
+        showAttendanceError(`자동 출석 확정 오류: ${finalizeResult.error.message}`);
+        return;
+      }
+      if (finalizeResult.data > 0) {
+        showToast(`종료된 일정의 참가 확정자 ${finalizeResult.data}명을 자동으로 참석 처리했습니다.`);
+      }
+    }
     const previousEventId = attendanceEventSelect.value;
     const monthStart = `${attendanceMonth.value}-01`;
     const [statsResult, eventsResult] = await Promise.all([
@@ -2233,7 +2249,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.1.0';
+    element.textContent = config?.appVersion || '1.2.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);

@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.1.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.2.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.1\.0</);
-  assert.match(config, /appVersion: '1\.1\.0'/);
-  assert.match(readme, /`1\.1\.0`/);
+  assert.match(html, /data-app-version>1\.2\.0</);
+  assert.match(config, /appVersion: '1\.2\.0'/);
+  assert.match(readme, /`1\.2\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -241,7 +241,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.1\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.2\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -451,6 +451,28 @@ test('출석 마이그레이션은 역할과 시작 시각, 상태, RLS를 서�
   assert.match(migration, /'attendance_updated'/);
   assert.match(migration, /grant execute on function public\.set_attendance\(uuid, uuid, text\) to authenticated/);
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.attendance_records/i);
+});
+
+test('종료된 일정은 참가 확정자만 자동 참석 처리하고 관리자 수정 전 기록을 보존한다', async () => {
+  const [migration, script] = await Promise.all([
+    readProjectFile('supabase/migrations/202608050011_auto_finalize_attendance.sql'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(migration, /add column if not exists attendance_finalized_at timestamptz/);
+  assert.match(migration, /where status = 'published' and attendance_finalized_at is null/);
+  assert.match(migration, /e\.ends_at <= now\(\)/);
+  assert.match(migration, /er\.status = 'confirmed'/);
+  assert.match(migration, /cm\.status = 'active'/);
+  assert.match(migration, /'attended'/);
+  assert.match(migration, /on conflict \(event_id, user_id\) do nothing/);
+  assert.match(migration, /private\.can_manage_club\(p_club_id, v_user_id\)/);
+  assert.match(migration, /attendance_auto_finalized/);
+  assert.match(migration, /create extension if not exists pg_cron/);
+  assert.match(migration, /'\*\/10 \* \* \* \*'/);
+  assert.match(migration, /event_responses_lock_after_attendance/);
+  assert.match(script, /\.rpc\('finalize_club_attendance'/);
+  assert.match(script, /Date\.now\(\) < new Date\(selectedScheduleEvent\.starts_at\)\.getTime\(\)/);
 });
 
 test('공지 화면은 목록, 오류 복구와 접근 가능한 관리 폼을 제공한다', async () => {
