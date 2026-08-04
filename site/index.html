@@ -11,6 +11,7 @@
     <title>KFC Football Club</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="./js/config.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.0" defer></script>
     <script src="./js/app.js" defer></script>
   </head>
   <body>
@@ -33,7 +34,7 @@
           <a href="#profile" data-route-link="profile">내 정보</a>
         </nav>
 
-        <a class="header-login" href="#login">로그인</a>
+        <button class="header-login" type="button" data-auth-action>로그인</button>
       </div>
     </header>
 
@@ -41,19 +42,19 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION 0.1.0</p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.2.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
               관리하는 비공개 축구 모임 공간입니다.
             </p>
             <div class="hero-actions">
-              <a class="primary-action" href="#login">Google로 시작하기</a>
+              <a class="primary-action" href="#login" data-primary-auth-action>Google로 시작하기</a>
               <a class="secondary-action" href="#schedule">화면 미리보기</a>
             </div>
             <div class="build-status" role="status">
               <span class="status-dot" aria-hidden="true"></span>
-              Supabase 연결 전 기본 화면을 준비하고 있습니다.
+              <span data-connection-status>Supabase 연결을 확인하고 있습니다.</span>
             </div>
           </div>
 
@@ -134,12 +135,12 @@
           <h1 id="profile-title">내 정보</h1>
           <p>로그인 후 공개 프로필과 클럽 정보를 관리할 수 있습니다.</p>
         </div>
-        <div class="profile-preview">
-          <div class="avatar-placeholder" aria-hidden="true">K</div>
+        <div class="profile-preview" data-profile-card>
+          <div class="avatar-placeholder" aria-hidden="true" data-profile-avatar>K</div>
           <div>
-            <span class="status-pill">로그인 필요</span>
-            <h2>회원 프로필</h2>
-            <p>Google 계정 연결은 다음 단계에서 진행합니다.</p>
+            <span class="status-pill" data-profile-status>로그인 확인 중</span>
+            <h2 data-profile-name>회원 프로필</h2>
+            <p data-profile-email>Google 계정으로 로그인하면 본인 정보가 표시됩니다.</p>
           </div>
         </div>
       </section>
@@ -158,7 +159,7 @@
             Google로 계속하기
           </button>
           <p class="login-notice">
-            현재는 화면 기반 단계입니다. Supabase 연결 후 로그인이 활성화됩니다.
+            로그인하면 KFC Football Club의 개인정보 처리 안내와 이용 규칙에 동의한 것으로 봅니다.
           </p>
         </div>
       </section>

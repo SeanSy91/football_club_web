@@ -168,8 +168,10 @@ button {
   color: white;
   font-size: 13px;
   font-weight: 800;
+  cursor: pointer;
   text-decoration: none;
   background: var(--green);
+  border: 0;
   border-radius: 999px;
 }
 
@@ -259,6 +261,16 @@ button {
   background: #e7a93f;
   border-radius: 50%;
   box-shadow: 0 0 0 5px rgba(231, 169, 63, 0.15);
+}
+
+.status-dot.is-ready {
+  background: #53a269;
+  box-shadow: 0 0 0 5px rgba(83, 162, 105, 0.15);
+}
+
+.status-dot.is-error {
+  background: #bd4d3d;
+  box-shadow: 0 0 0 5px rgba(189, 77, 61, 0.15);
 }
 
 .next-match-card {
@@ -510,6 +522,11 @@ button {
   place-items: center;
 }
 
+.avatar-placeholder.has-image {
+  background-position: center;
+  background-size: cover;
+}
+
 .login-view {
   display: grid;
   min-height: calc(100vh - 78px);
@@ -568,6 +585,11 @@ button {
   background: white;
   border-radius: 50%;
   place-items: center;
+}
+
+.google-button:disabled {
+  cursor: wait;
+  opacity: 0.64;
 }
 
 .login-notice {

@@ -15,9 +15,7 @@
 
 ## 현재 버전
 
-`0.1.0` — 웹 기반 구조와 GitHub Pages 배포 준비
-
-현재 로그인 버튼은 화면만 제공하며 Supabase 프로젝트 연결 후 활성화됩니다.
+`0.2.0` — Supabase 개발 환경, Google 로그인, 로그인 유지와 본인 프로필 조회
 
 ## 로컬 실행
 
@@ -57,5 +55,6 @@ OAuth 비밀값은 Supabase 대시보드에서만 관리합니다.
 - [웹 제품 사양](docs/product-spec.md)
 - [기술 구조와 보안](docs/architecture.md)
 - [단계별 개발 계획](docs/development-plan.md)
+- [Supabase 개발 환경 설정](docs/supabase-setup.md)
 
 기존 Flutter/Firebase 프로토타입은 별도 저장소 `football_club_app`의 `v0.4.0` 태그로 보존합니다.

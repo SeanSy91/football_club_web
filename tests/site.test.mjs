@@ -44,3 +44,33 @@ test('GitHub Pages는 검증 후 site 디렉터리만 배포한다', async () =>
   assert.match(workflow, /actions\/deploy-pages@v4/);
   assert.match(workflow, /path: site/);
 });
+
+test('Supabase 공개 설정과 Google 인증 흐름이 연결되어 있다', async () => {
+  const [html, config, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/config.js'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /@supabase\/supabase-js@2\.112\.0/);
+  assert.match(config, /https:\/\/salmdtkbdruormkhdpkh\.supabase\.co/);
+  assert.match(config, /sb_publishable_/);
+  assert.match(script, /createClient/);
+  assert.match(script, /signInWithOAuth/);
+  assert.match(script, /provider: 'google'/);
+  assert.match(script, /signOut/);
+  assert.match(script, /onAuthStateChange/);
+});
+
+test('profiles 마이그레이션은 RLS와 본인 전용 정책을 설정한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040001_create_profiles.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.profiles/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /to authenticated/);
+  assert.match(migration, /auth\.uid\(\)/);
+  assert.match(migration, /after insert on auth\.users/);
+  assert.doesNotMatch(migration, /to anon/);
+});
