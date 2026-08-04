@@ -220,16 +220,34 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.0.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.0.1 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.0\.0</);
-  assert.match(config, /appVersion: '1\.0\.0'/);
-  assert.match(readme, /`1\.0\.0`/);
+  assert.match(html, /data-app-version>1\.0\.1</);
+  assert.match(config, /appVersion: '1\.0\.1'/);
+  assert.match(readme, /`1\.0\.1`/);
+});
+
+test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
+  const [html, image] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readFile(new URL('../site/Main_image.png', import.meta.url)),
+  ]);
+
+  assert.match(html, /property="og:title" content="KFC Football Club"/);
+  assert.match(html, /property="og:description"/);
+  assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.0\.1/);
+  assert.match(html, /property="og:image:width" content="1179"/);
+  assert.match(html, /property="og:image:height" content="1171"/);
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+  assert.equal(image.subarray(1, 4).toString('ascii'), 'PNG');
+  assert.equal(image.readUInt32BE(16), 1179);
+  assert.equal(image.readUInt32BE(20), 1171);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {

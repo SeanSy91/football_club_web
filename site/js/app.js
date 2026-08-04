@@ -2051,7 +2051,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.0.0';
+    element.textContent = config?.appVersion || '1.0.1';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
