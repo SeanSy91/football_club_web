@@ -32,6 +32,7 @@
           <a href="#club" data-route-link="club">클럽</a>
           <a href="#schedule" data-route-link="schedule">일정</a>
           <a href="#attendance" data-route-link="attendance">참석 현황</a>
+          <a href="#announcements" data-route-link="announcements">공지</a>
           <a href="#profile" data-route-link="profile">내 정보</a>
         </nav>
 
@@ -43,7 +44,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.8.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>0.9.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -373,10 +374,11 @@
           </form>
         </div>
 
-        <div class="empty-state" data-schedule-error hidden>
+        <div class="empty-state" data-schedule-error role="alert" hidden>
           <span aria-hidden="true">24</span>
           <h2>일정을 불러오지 못했습니다</h2>
           <p data-schedule-error-message>잠시 후 다시 시도해 주세요.</p>
+          <button class="secondary-button" type="button" data-schedule-retry>다시 시도</button>
         </div>
       </section>
 
@@ -401,6 +403,12 @@
           <span aria-hidden="true">KFC</span>
           <h2>먼저 클럽에 가입해 주세요</h2>
           <p>출석 결과는 같은 클럽의 회원에게만 공개됩니다.</p>
+        </div>
+        <div class="empty-state" data-attendance-error role="alert" hidden>
+          <span aria-hidden="true">✓</span>
+          <h2>출석 현황을 불러오지 못했습니다</h2>
+          <p data-attendance-error-message>잠시 후 다시 시도해 주세요.</p>
+          <button class="secondary-button" type="button" data-attendance-retry>다시 시도</button>
         </div>
         <div data-attendance-workspace hidden>
           <div class="metric-grid attendance-metrics">
@@ -427,6 +435,85 @@
             <p class="form-status" role="status" aria-live="polite" data-attendance-status></p>
             <div class="attendance-roster" data-attendance-roster></div>
           </section>
+        </div>
+      </section>
+
+      <section class="view content-view" data-view="announcements" aria-labelledby="announcements-title" hidden>
+        <div class="section-heading announcement-heading">
+          <div>
+            <p class="eyebrow">ANNOUNCEMENTS</p>
+            <h1 id="announcements-title">공지사항</h1>
+            <p>클럽 운영 안내와 중요한 소식을 모든 회원이 함께 확인합니다.</p>
+          </div>
+          <button class="primary-action compact-action" type="button" data-create-announcement hidden>
+            새 공지 작성
+          </button>
+        </div>
+
+        <div class="schedule-loading" data-announcement-loading role="status">
+          <span class="loading-dot" aria-hidden="true"></span>
+          <span>공지사항을 확인하고 있습니다.</span>
+        </div>
+        <div class="empty-state" data-announcement-no-club hidden>
+          <span aria-hidden="true">KFC</span>
+          <h2>먼저 클럽에 가입해 주세요</h2>
+          <p>공지사항은 같은 클럽의 회원에게만 공개됩니다.</p>
+        </div>
+        <div class="schedule-error" data-announcement-error role="alert" hidden>
+          <strong>공지사항을 불러오지 못했습니다.</strong>
+          <p data-announcement-error-message>잠시 후 다시 시도해 주세요.</p>
+          <button type="button" data-announcement-retry>다시 시도</button>
+        </div>
+
+        <div class="announcement-workspace" data-announcement-workspace hidden>
+          <div class="announcement-list" data-announcement-list></div>
+          <div class="empty-state" data-announcement-empty hidden>
+            <span aria-hidden="true">!</span>
+            <h2>아직 등록된 공지가 없습니다</h2>
+            <p>새로운 소식이 등록되면 이곳에서 확인할 수 있습니다.</p>
+          </div>
+
+          <form class="event-form announcement-form" data-announcement-form hidden>
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">MANAGE NOTICE</p>
+                <h2 data-announcement-form-title>새 공지 작성</h2>
+              </div>
+              <button class="secondary-button" type="button" data-announcement-form-cancel>닫기</button>
+            </div>
+            <input name="announcementId" type="hidden" />
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>공지 제목 *</span>
+                <input name="title" type="text" required minlength="2" maxlength="100" />
+              </label>
+              <label class="form-field form-field-wide">
+                <span>공지 내용 *</span>
+                <textarea name="content" required minlength="1" maxlength="4000" rows="8"></textarea>
+              </label>
+              <label class="form-field">
+                <span>게시 시작 *</span>
+                <input name="startsAt" type="datetime-local" required />
+              </label>
+              <label class="form-field">
+                <span>게시 종료</span>
+                <input name="endsAt" type="datetime-local" />
+              </label>
+              <label class="form-field">
+                <span>공지 상태 *</span>
+                <select name="status" required>
+                  <option value="draft">임시 저장</option>
+                  <option value="published">공개</option>
+                </select>
+              </label>
+              <label class="checkbox-field announcement-pin-field">
+                <input name="isPinned" type="checkbox" />
+                <span>목록 상단에 중요 공지로 고정</span>
+              </label>
+            </div>
+            <p class="form-status" role="status" aria-live="polite" data-announcement-form-status></p>
+            <button class="save-button" type="submit" data-announcement-save>공지 저장</button>
+          </form>
         </div>
       </section>
 
@@ -550,6 +637,7 @@
       <a href="#club" data-route-link="club"><span aria-hidden="true">◇</span>클럽</a>
       <a href="#schedule" data-route-link="schedule"><span aria-hidden="true">□</span>일정</a>
       <a href="#attendance" data-route-link="attendance"><span aria-hidden="true">✓</span>참석</a>
+      <a href="#announcements" data-route-link="announcements"><span aria-hidden="true">!</span>공지</a>
       <a href="#profile" data-route-link="profile"><span aria-hidden="true">○</span>내 정보</a>
     </nav>
 

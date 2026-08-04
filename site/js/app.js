@@ -60,9 +60,20 @@
   const attendanceLoading = document.querySelector('[data-attendance-loading]');
   const attendanceNoClub = document.querySelector('[data-attendance-no-club]');
   const attendanceWorkspace = document.querySelector('[data-attendance-workspace]');
+  const attendanceError = document.querySelector('[data-attendance-error]');
   const attendanceMonth = document.querySelector('[data-attendance-month]');
   const attendanceEventSelect = document.querySelector('[data-attendance-event]');
   const attendanceStatus = document.querySelector('[data-attendance-status]');
+  const announcementLoading = document.querySelector('[data-announcement-loading]');
+  const announcementNoClub = document.querySelector('[data-announcement-no-club]');
+  const announcementWorkspace = document.querySelector('[data-announcement-workspace]');
+  const announcementError = document.querySelector('[data-announcement-error]');
+  const announcementList = document.querySelector('[data-announcement-list]');
+  const announcementEmpty = document.querySelector('[data-announcement-empty]');
+  const announcementForm = document.querySelector('[data-announcement-form]');
+  const announcementFormStatus = document.querySelector('[data-announcement-form-status]');
+  const announcementSaveButton = document.querySelector('[data-announcement-save]');
+  const createAnnouncementButton = document.querySelector('[data-create-announcement]');
   const config = window.KFC_CONFIG;
   let authReady = false;
   let session = null;
@@ -76,6 +87,7 @@
   let scheduledEvents = [];
   let eventResponses = [];
   let attendanceEvents = [];
+  let announcements = [];
   let selectedEventId = '';
   let memberDirectoryLoadId = 0;
   let toastTimer;
@@ -530,6 +542,7 @@
     memberDirectoryLoadId += 1;
     resetAttendance();
     resetSchedule();
+    resetAnnouncements();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
     clubOnboarding.hidden = true;
@@ -544,6 +557,7 @@
     activeClub = null;
     showScheduleNoClub();
     showAttendanceNoClub();
+    showAnnouncementsNoClub();
     clubLoading.hidden = true;
     clubDashboard.hidden = true;
     clubOnboarding.hidden = false;
@@ -651,6 +665,9 @@
       event_cancelled: '일정 취소',
       participant_status_changed: '참가자 상태 변경',
       attendance_updated: '출석 상태 변경',
+      announcement_created: '공지 작성',
+      announcement_updated: '공지 수정',
+      announcement_archived: '공지 보관',
     }[action] || '관리 작업';
   }
 
@@ -687,6 +704,15 @@
     }
     if (entry.action === 'attendance_updated') {
       return `${entry.actor_display_name}님이 ${entry.target_display_name}님의 출석 상태를 변경했습니다.`;
+    }
+    if (entry.action === 'announcement_created') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 공지를 작성했습니다.`;
+    }
+    if (entry.action === 'announcement_updated') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 공지를 수정했습니다.`;
+    }
+    if (entry.action === 'announcement_archived') {
+      return `${entry.actor_display_name}님이 ${entry.target_display_name} 공지를 보관했습니다.`;
     }
     return `${entry.actor_display_name}님이 관리 작업을 수행했습니다.`;
   }
@@ -806,6 +832,7 @@
 
     await loadSchedule(membership);
     await loadAttendance(membership);
+    await loadAnnouncements(membership);
   }
 
   function canManageSchedule(membership = activeClub) {
@@ -1412,6 +1439,7 @@
     attendanceLoading.hidden = false;
     attendanceNoClub.hidden = true;
     attendanceWorkspace.hidden = true;
+    attendanceError.hidden = true;
     attendanceEventSelect.replaceChildren();
     attendanceStatus.textContent = '';
     attendanceStatus.classList.remove('is-error');
@@ -1423,7 +1451,16 @@
     attendanceEvents = [];
     attendanceLoading.hidden = true;
     attendanceWorkspace.hidden = true;
+    attendanceError.hidden = true;
     attendanceNoClub.hidden = false;
+  }
+
+  function showAttendanceError(message) {
+    attendanceLoading.hidden = true;
+    attendanceNoClub.hidden = true;
+    attendanceWorkspace.hidden = true;
+    attendanceError.hidden = false;
+    document.querySelector('[data-attendance-error-message]').textContent = message;
   }
 
   function renderMonthlyAttendance(stats) {
@@ -1525,6 +1562,7 @@
     attendanceLoading.hidden = false;
     attendanceNoClub.hidden = true;
     attendanceWorkspace.hidden = true;
+    attendanceError.hidden = true;
     attendanceStatus.textContent = '';
     attendanceStatus.classList.remove('is-error');
     const previousEventId = attendanceEventSelect.value;
@@ -1534,7 +1572,7 @@
       supabaseClient.from('events').select('id, title, starts_at').eq('club_id', membership.club_id).eq('status', 'published').lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
     ]);
     if (statsResult.error || eventsResult.error) {
-      attendanceLoading.lastChild.textContent = ` 출석 현황 오류: ${(statsResult.error || eventsResult.error).message}`;
+      showAttendanceError(`출석 현황 오류: ${(statsResult.error || eventsResult.error).message}`);
       return;
     }
     renderMonthlyAttendance(statsResult.data);
@@ -1574,6 +1612,233 @@
     }
     await loadAttendance(activeClub);
     showToast('출석 상태를 저장했습니다.');
+  }
+
+  function announcementDisplayStatus(announcement) {
+    if (announcement.status !== 'published') return announcement.status;
+    const now = Date.now();
+    if (new Date(announcement.starts_at).getTime() > now) return 'scheduled';
+    if (announcement.ends_at && new Date(announcement.ends_at).getTime() <= now) return 'expired';
+    return 'published';
+  }
+
+  function announcementStatusLabel(status) {
+    return {
+      draft: '임시 저장',
+      published: '공개 중',
+      scheduled: '공개 예정',
+      expired: '게시 종료',
+      archived: '보관됨',
+    }[status] || status;
+  }
+
+  function resetAnnouncements() {
+    announcements = [];
+    announcementLoading.hidden = false;
+    announcementLoading.lastElementChild.textContent = '공지사항을 확인하고 있습니다.';
+    announcementNoClub.hidden = true;
+    announcementWorkspace.hidden = true;
+    announcementError.hidden = true;
+    announcementList.replaceChildren();
+    announcementEmpty.hidden = true;
+    announcementForm.hidden = true;
+    createAnnouncementButton.hidden = true;
+  }
+
+  function showAnnouncementsNoClub() {
+    announcements = [];
+    announcementLoading.hidden = true;
+    announcementWorkspace.hidden = true;
+    announcementError.hidden = true;
+    announcementNoClub.hidden = false;
+    createAnnouncementButton.hidden = true;
+  }
+
+  function showAnnouncementError(message) {
+    announcementLoading.hidden = true;
+    announcementNoClub.hidden = true;
+    announcementWorkspace.hidden = true;
+    announcementError.hidden = false;
+    document.querySelector('[data-announcement-error-message]').textContent = message;
+  }
+
+  function closeAnnouncementForm() {
+    announcementForm.hidden = true;
+    announcementFormStatus.textContent = '';
+    announcementFormStatus.classList.remove('is-error');
+  }
+
+  function openAnnouncementForm(announcement = null) {
+    if (!canManageSchedule()) return;
+    announcementForm.reset();
+    announcementForm.elements.announcementId.value = announcement?.id || '';
+    announcementForm.elements.title.value = announcement?.title || '';
+    announcementForm.elements.content.value = announcement?.content || '';
+    announcementForm.elements.startsAt.value = toKoreanDateTimeLocal(
+      announcement?.starts_at || new Date(),
+    );
+    announcementForm.elements.endsAt.value = announcement?.ends_at
+      ? toKoreanDateTimeLocal(announcement.ends_at)
+      : '';
+    announcementForm.elements.status.value =
+      announcement?.status === 'published' ? 'published' : 'draft';
+    announcementForm.elements.isPinned.checked = Boolean(announcement?.is_pinned);
+    document.querySelector('[data-announcement-form-title]').textContent = announcement
+      ? '공지 수정'
+      : '새 공지 작성';
+    announcementFormStatus.textContent = '';
+    announcementFormStatus.classList.remove('is-error');
+    announcementForm.hidden = false;
+    announcementForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announcementForm.elements.title.focus({ preventScroll: true });
+  }
+
+  function createAnnouncementCard(announcement) {
+    const card = document.createElement('article');
+    card.className = 'announcement-card';
+    card.classList.toggle('is-pinned', announcement.is_pinned);
+
+    const header = document.createElement('div');
+    header.className = 'announcement-card-header';
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'announcement-card-title';
+    const title = document.createElement('h2');
+    title.textContent = announcement.title;
+    titleWrap.append(title);
+    if (announcement.is_pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'announcement-pin';
+      pin.textContent = '중요';
+      titleWrap.prepend(pin);
+    }
+    const displayStatus = announcementDisplayStatus(announcement);
+    const status = document.createElement('span');
+    status.className = 'announcement-status';
+    status.dataset.status = displayStatus;
+    status.textContent = announcementStatusLabel(displayStatus);
+    header.append(titleWrap, status);
+
+    const content = document.createElement('p');
+    content.className = 'announcement-content';
+    content.textContent = announcement.content;
+    const meta = document.createElement('div');
+    meta.className = 'announcement-card-meta';
+    const start = document.createElement('span');
+    start.textContent = `게시 시작 ${formatKoreanDateTime(announcement.starts_at)}`;
+    meta.append(start);
+    if (announcement.ends_at) {
+      const end = document.createElement('span');
+      end.textContent = `· 게시 종료 ${formatKoreanDateTime(announcement.ends_at)}`;
+      meta.append(end);
+    }
+    card.append(header, content, meta);
+
+    if (canManageSchedule() && announcement.status !== 'archived') {
+      const actions = document.createElement('div');
+      actions.className = 'announcement-card-actions';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.dataset.editAnnouncement = announcement.id;
+      edit.textContent = '수정';
+      edit.addEventListener('click', () => openAnnouncementForm(announcement));
+      const archive = document.createElement('button');
+      archive.type = 'button';
+      archive.dataset.archiveAnnouncement = announcement.id;
+      archive.textContent = '보관';
+      archive.addEventListener('click', () => archiveAnnouncement(announcement, archive));
+      actions.append(edit, archive);
+      card.append(actions);
+    }
+    return card;
+  }
+
+  async function loadAnnouncements(membership = activeClub) {
+    if (!membership) {
+      showAnnouncementsNoClub();
+      return;
+    }
+    announcementLoading.hidden = false;
+    announcementNoClub.hidden = true;
+    announcementWorkspace.hidden = true;
+    announcementError.hidden = true;
+    createAnnouncementButton.hidden = !canManageSchedule(membership);
+    const { data, error } = await supabaseClient
+      .from('announcements')
+      .select('id, club_id, title, content, is_pinned, starts_at, ends_at, status, created_at, updated_at')
+      .eq('club_id', membership.club_id)
+      .order('is_pinned', { ascending: false })
+      .order('starts_at', { ascending: false });
+    if (error) {
+      showAnnouncementError(error.message);
+      return;
+    }
+    announcements = data;
+    announcementList.replaceChildren();
+    data.forEach((announcement) => announcementList.append(createAnnouncementCard(announcement)));
+    announcementEmpty.hidden = data.length > 0;
+    announcementLoading.hidden = true;
+    announcementWorkspace.hidden = false;
+  }
+
+  async function saveAnnouncement(event) {
+    event.preventDefault();
+    if (!activeClub || !canManageSchedule() || !announcementForm.reportValidity()) return;
+    const announcementId = announcementForm.elements.announcementId.value;
+    const startsAt = koreanDateTimeLocalToIso(announcementForm.elements.startsAt.value);
+    const endsAtValue = announcementForm.elements.endsAt.value;
+    const endsAt = endsAtValue ? koreanDateTimeLocalToIso(endsAtValue) : null;
+    if (!startsAt || (endsAtValue && !endsAt)) {
+      announcementFormStatus.textContent = '게시 기간을 확인해 주세요.';
+      announcementFormStatus.classList.add('is-error');
+      return;
+    }
+
+    announcementSaveButton.disabled = true;
+    announcementFormStatus.textContent = '공지를 안전하게 저장하고 있습니다.';
+    announcementFormStatus.classList.remove('is-error');
+    const shared = {
+      p_title: announcementForm.elements.title.value.trim(),
+      p_content: announcementForm.elements.content.value.trim(),
+      p_is_pinned: announcementForm.elements.isPinned.checked,
+      p_starts_at: startsAt,
+      p_ends_at: endsAt,
+      p_status: announcementForm.elements.status.value,
+    };
+    const { error } = announcementId
+      ? await supabaseClient.rpc('update_announcement', {
+          p_announcement_id: announcementId,
+          ...shared,
+        })
+      : await supabaseClient.rpc('create_announcement', {
+          p_club_id: activeClub.club_id,
+          ...shared,
+        });
+    announcementSaveButton.disabled = false;
+    if (error) {
+      announcementFormStatus.textContent = error.message;
+      announcementFormStatus.classList.add('is-error');
+      return;
+    }
+    closeAnnouncementForm();
+    await loadAnnouncements(activeClub);
+    showToast(announcementId ? '공지를 수정했습니다.' : '공지를 작성했습니다.');
+  }
+
+  async function archiveAnnouncement(announcement, button) {
+    if (!canManageSchedule()) return;
+    if (!window.confirm(`${announcement.title} 공지를 보관할까요?`)) return;
+    button.disabled = true;
+    const { error } = await supabaseClient.rpc('archive_announcement', {
+      p_announcement_id: announcement.id,
+    });
+    if (error) {
+      button.disabled = false;
+      showToast(`공지를 보관하지 못했습니다: ${error.message}`);
+      return;
+    }
+    closeAnnouncementForm();
+    await loadAnnouncements(activeClub);
+    showToast('공지를 보관했습니다.');
   }
 
   async function loadClub(user, createdInviteCode = '') {
@@ -1733,7 +1998,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '0.8.0';
+    element.textContent = config?.appVersion || '0.9.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -1782,10 +2047,22 @@
   });
   document.querySelector('[data-publish-event]')?.addEventListener('click', publishSelectedEvent);
   document.querySelector('[data-cancel-event]')?.addEventListener('click', cancelSelectedEvent);
+  document.querySelector('[data-schedule-retry]')?.addEventListener('click', () => {
+    if (activeClub) loadSchedule(activeClub);
+  });
   attendanceMonth?.addEventListener('change', () => {
     if (activeClub) loadAttendance(activeClub);
   });
   attendanceEventSelect?.addEventListener('change', loadAttendanceRecords);
+  document.querySelector('[data-attendance-retry]')?.addEventListener('click', () => {
+    if (activeClub) loadAttendance(activeClub);
+  });
+  createAnnouncementButton?.addEventListener('click', () => openAnnouncementForm());
+  announcementForm?.addEventListener('submit', saveAnnouncement);
+  document.querySelector('[data-announcement-form-cancel]')?.addEventListener('click', closeAnnouncementForm);
+  document.querySelector('[data-announcement-retry]')?.addEventListener('click', () => {
+    if (activeClub) loadAnnouncements(activeClub);
+  });
   applyEventButton?.addEventListener('click', applyToSelectedEvent);
   absentEventButton?.addEventListener('click', setSelectedEventAbsent);
   cancelParticipationButton?.addEventListener('click', cancelSelectedParticipation);

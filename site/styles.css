@@ -1433,6 +1433,171 @@ button {
   margin-top: 18px;
 }
 
+.announcement-heading {
+  display: flex;
+  max-width: none;
+  gap: 28px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.announcement-heading > div {
+  max-width: 720px;
+}
+
+.compact-action {
+  flex: 0 0 auto;
+  min-height: 44px;
+  cursor: pointer;
+  border: 0;
+}
+
+.announcement-workspace {
+  margin-top: 42px;
+}
+
+.announcement-list {
+  display: grid;
+  gap: 14px;
+}
+
+.announcement-card {
+  padding: 28px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  box-shadow: 0 14px 34px rgba(27, 48, 38, 0.05);
+}
+
+.announcement-card.is-pinned {
+  border-color: #b6ca4e;
+  box-shadow: inset 5px 0 0 var(--lime), 0 14px 34px rgba(27, 48, 38, 0.05);
+}
+
+.announcement-card-header,
+.announcement-card-meta,
+.announcement-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.announcement-card-header {
+  justify-content: space-between;
+}
+
+.announcement-card-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.announcement-card-title h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.announcement-pin,
+.announcement-status {
+  display: inline-flex;
+  min-height: 24px;
+  padding: 0 9px;
+  align-items: center;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 900;
+  background: rgba(209, 235, 92, 0.42);
+  border-radius: 999px;
+}
+
+.announcement-status[data-status='draft'] {
+  color: #6d591c;
+  background: #f5ecc9;
+}
+
+.announcement-status[data-status='archived'],
+.announcement-status[data-status='expired'] {
+  color: #7a625d;
+  background: #eee4e1;
+}
+
+.announcement-status[data-status='scheduled'] {
+  color: #315a78;
+  background: #dcebf4;
+}
+
+.announcement-content {
+  margin: 20px 0 0;
+  color: var(--muted);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.announcement-card-meta {
+  margin-top: 22px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.announcement-card-actions {
+  margin-top: 20px;
+}
+
+.announcement-card-actions button,
+.schedule-error button {
+  min-height: 38px;
+  padding: 0 14px;
+  color: var(--green);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.announcement-card-actions button[data-archive-announcement] {
+  color: #9b3528;
+}
+
+.announcement-form {
+  margin-top: 34px;
+  padding: 42px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+}
+
+.announcement-form .secondary-button {
+  margin-top: 0;
+}
+
+.announcement-pin-field {
+  align-self: end;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 14px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.schedule-error {
+  margin-top: 54px;
+  padding: 28px;
+  color: #772d24;
+  background: #f8e6e2;
+  border: 1px solid #e5bdb6;
+  border-radius: var(--radius-medium);
+}
+
+.schedule-error p {
+  margin: 8px 0 18px;
+}
+
 .profile-preview {
   display: flex;
   gap: 24px;
@@ -1862,6 +2027,10 @@ button {
     grid-template-columns: 1fr 1fr;
   }
 
+  .announcement-heading {
+    align-items: flex-start;
+  }
+
   .feature-grid article {
     min-height: 0;
     padding: 28px 4px;
@@ -1945,7 +2114,7 @@ button {
     left: 12px;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     padding: 7px;
     background: rgba(18, 55, 42, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.16);
@@ -1990,6 +2159,19 @@ button {
   .attendance-heading {
     display: grid;
     align-items: start;
+  }
+
+  .announcement-heading {
+    display: grid;
+  }
+
+  .announcement-heading .compact-action,
+  .announcement-card-actions button {
+    width: 100%;
+  }
+
+  .announcement-form {
+    padding: 30px 22px;
   }
 
   .attendance-row {

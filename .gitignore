@@ -3,3 +3,4 @@ Thumbs.db
 .env
 .env.*
 site/js/config.local.js
+backups/

@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v0.8.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v0.9.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>0\.8\.0</);
-  assert.match(config, /appVersion: '0\.8\.0'/);
-  assert.match(readme, /`0\.8\.0`/);
+  assert.match(html, /data-app-version>0\.9\.0</);
+  assert.match(config, /appVersion: '0\.9\.0'/);
+  assert.match(readme, /`0\.9\.0`/);
 });
 
 test('일정 화면은 목록, 상세와 접근 가능한 관리 폼을 제공한다', async () => {
@@ -411,4 +411,99 @@ test('출석 마이그레이션은 역할과 시작 시각, 상태, RLS를 서�
   assert.match(migration, /'attendance_updated'/);
   assert.match(migration, /grant execute on function public\.set_attendance\(uuid, uuid, text\) to authenticated/);
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.attendance_records/i);
+});
+
+test('공지 화면은 목록, 오류 복구와 접근 가능한 관리 폼을 제공한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /data-view="announcements"/);
+  assert.match(html, /data-route-link="announcements"/);
+  assert.match(html, /data-announcement-loading/);
+  assert.match(html, /data-announcement-list/);
+  assert.match(html, /data-announcement-empty/);
+  assert.match(html, /data-announcement-error[^>]+role="alert"/);
+  assert.match(html, /data-announcement-retry/);
+  assert.match(html, /data-announcement-form/);
+  assert.match(html, /name="title"[^>]+required[^>]+minlength="2"[^>]+maxlength="100"/);
+  assert.match(html, /name="content"[^>]+required[^>]+minlength="1"[^>]+maxlength="4000"/);
+  assert.match(html, /name="startsAt"[^>]+type="datetime-local"[^>]+required/);
+  assert.match(html, /name="endsAt"[^>]+type="datetime-local"/);
+  assert.match(html, /name="isPinned"[^>]+type="checkbox"/);
+  assert.match(html, /aria-live="polite" data-announcement-form-status/);
+});
+
+test('공지 클라이언트는 게시 기간을 한국 시간으로 변환하고 서버 함수로만 관리한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /\.from\('announcements'\)/);
+  assert.match(script, /create_announcement/);
+  assert.match(script, /update_announcement/);
+  assert.match(script, /archive_announcement/);
+  assert.match(script, /koreanDateTimeLocalToIso/);
+  assert.match(script, /announcement\.is_pinned/);
+  assert.match(script, /data-announcement-retry/);
+  assert.doesNotMatch(script, /\.from\('announcements'\)\s*\.insert/);
+  assert.doesNotMatch(script, /\.from\('announcements'\)\s*\.update/);
+  assert.doesNotMatch(script, /\.from\('announcements'\)\s*\.delete/);
+});
+
+test('공지 마이그레이션은 게시 기간, 역할, RLS와 직접 쓰기 금지를 서버에서 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608040009_create_announcements.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.announcements/);
+  assert.match(migration, /status in \('draft', 'published', 'archived'\)/);
+  assert.match(migration, /ends_at is null or ends_at > starts_at/);
+  assert.match(migration, /alter table public\.announcements enable row level security/);
+  assert.match(migration, /revoke all on table public\.announcements from anon, authenticated/);
+  assert.match(migration, /private\.is_active_club_member\(club_id\)/);
+  assert.match(migration, /private\.can_manage_club\(club_id\)/);
+  assert.match(migration, /status = 'published'[\s\S]+starts_at <= now\(\)/);
+  assert.match(migration, /ends_at is null or ends_at > now\(\)/);
+  assert.match(migration, /create or replace function public\.create_announcement/);
+  assert.match(migration, /create or replace function public\.update_announcement/);
+  assert.match(migration, /create or replace function public\.archive_announcement/);
+  assert.match(migration, /private\.can_manage_club\(p_club_id, v_user_id\)/);
+  assert.match(migration, /private\.can_manage_club\(v_announcement\.club_id, v_user_id\)/);
+  assert.match(migration, /'announcement_created'/);
+  assert.match(migration, /'announcement_updated'/);
+  assert.match(migration, /'announcement_archived'/);
+  assert.match(migration, /target_type in \('club', 'member', 'invite', 'event', 'announcement'\)/);
+  assert.match(migration, /grant execute on function public\.create_announcement/);
+  assert.match(migration, /grant execute on function public\.update_announcement/);
+  assert.match(migration, /grant execute on function public\.archive_announcement/);
+  assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.announcements/i);
+});
+
+test('주요 데이터 화면은 네트워크 오류 후 명시적으로 다시 시도할 수 있다', async () => {
+  const [html, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-schedule-error[^>]+role="alert"/);
+  assert.match(html, /data-schedule-retry/);
+  assert.match(html, /data-attendance-error[^>]+role="alert"/);
+  assert.match(html, /data-attendance-retry/);
+  assert.match(html, /data-announcement-error[^>]+role="alert"/);
+  assert.match(html, /data-announcement-retry/);
+  assert.match(script, /data-schedule-retry/);
+  assert.match(script, /data-attendance-retry/);
+  assert.match(script, /data-announcement-retry/);
+});
+
+test('운영 문서는 백업, Storage 분리 보관과 안전한 복구 절차를 제공한다', async () => {
+  const [operations, gitignore] = await Promise.all([
+    readProjectFile('docs/operations.md'),
+    readProjectFile('.gitignore'),
+  ]);
+
+  assert.match(operations, /supabase db dump --linked/);
+  assert.match(operations, /profile-images/);
+  assert.match(operations, /실제 WebP 파일은 보존하지 않는다/);
+  assert.match(operations, /운영 프로젝트에 즉시 덮어쓰지 않는다/);
+  assert.match(operations, /사용자 승인 없이 실행하지 않는다/);
+  assert.match(operations, /Asia\/Seoul/);
+  assert.match(gitignore, /^backups\/$/m);
 });
