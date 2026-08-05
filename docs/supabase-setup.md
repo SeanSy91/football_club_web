@@ -194,3 +194,10 @@ SQL Editor에서 `supabase/migrations/202608050014_add_event_push_notifications.
 
 예약 시각이 지나면 다음 Cron 주기에 처리되므로 실제 전송은 최대 약 5분 늦을 수 있다. 실행 후
 Edge Function을 `docs/push-notifications.md`의 명령으로 다시 배포한다.
+
+## 15. 취소 일정 일반 회원 비공개
+
+SQL Editor에서
+`supabase/migrations/202608050015_hide_cancelled_events_from_members.sql`을 실행한다.
+이 정책부터 일반 회원은 공개 상태의 일정만 조회하고, owner와 admin만 임시 저장 및 취소 일정을
+계속 조회할 수 있다. 화면 필터와 별개로 데이터베이스 RLS가 취소 일정과 취소 사유 조회를 차단한다.

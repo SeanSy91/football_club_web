@@ -398,16 +398,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.8.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.8.1 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.8\.0</);
-  assert.match(config, /appVersion: '1\.8\.0'/);
-  assert.match(readme, /`1\.8\.0`/);
+  assert.match(html, /data-app-version>1\.8\.1</);
+  assert.match(config, /appVersion: '1\.8\.1'/);
+  assert.match(readme, /`1\.8\.1`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -419,7 +419,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.8\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.8\.1/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -535,6 +535,22 @@ test('일정 마이그레이션은 역할, 상태, 시간과 직접 쓰기 권�
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.events/i);
 });
 
+test('취소 일정은 owner와 admin만 조회하고 일반 회원 쿼리에서도 제외한다', async () => {
+  const [migration, script, specification] = await Promise.all([
+    readProjectFile('supabase/migrations/202608050015_hide_cancelled_events_from_members.sql'),
+    readProjectFile('site/js/app.js'),
+    readProjectFile('docs/product-spec.md'),
+  ]);
+
+  assert.match(migration, /drop policy if exists "events_select_club_members"/);
+  assert.match(migration, /status = 'published'/);
+  assert.match(migration, /private\.can_manage_club\(club_id\)/);
+  assert.doesNotMatch(migration, /status in \('published', 'cancelled'\)/);
+  assert.match(script, /if \(!canManageSchedule\(membership\)\)[\s\S]+scheduleQuery = scheduleQuery\.eq\('status', 'published'\)/);
+  assert.match(script, /data\.filter\(\(scheduleEvent\) => scheduleEvent\.status === 'published'\)/);
+  assert.match(specification, /취소된 일정과 취소 사유는 owner와 admin만 조회/);
+});
+
 test('일정 상세는 참가 응답과 네 가지 공개 명단을 제공한다', async () => {
   const html = await readProjectFile('site/index.html');
 
@@ -625,6 +641,21 @@ test('출석 클라이언트는 공개 뷰를 조회하고 서버 함수로만 �
   assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.insert/);
   assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.update/);
   assert.doesNotMatch(script, /\.from\('attendance_records'\)\s*\.delete/);
+});
+
+test('출석부는 겹친 조회의 이전 응답을 버리고 회원별 한 행만 원자적으로 렌더링한다', async () => {
+  const script = await readProjectFile('site/js/app.js');
+
+  assert.match(script, /let attendanceLoadId = 0/);
+  assert.match(script, /let attendanceRecordLoadId = 0/);
+  assert.match(script, /const requestId = \+\+attendanceRecordLoadId/);
+  assert.match(script, /requestId !== attendanceRecordLoadId/);
+  assert.match(script, /attendanceEventSelect\.value !== eventId/);
+  assert.match(script, /activeClub\?\.club_id !== clubId/);
+  assert.match(script, /function uniqueActiveClubMembers\(\)/);
+  assert.match(script, /const fragment = document\.createDocumentFragment\(\)/);
+  assert.match(script, /roster\.replaceChildren\(fragment\)/);
+  assert.match(script, /new Map\(eventsResult\.data\.map\(\(scheduleEvent\) => \[scheduleEvent\.id, scheduleEvent\]\)\)/);
 });
 
 test('출석 마이그레이션은 역할과 시작 시각, 상태, RLS를 서버에서 강제한다', async () => {

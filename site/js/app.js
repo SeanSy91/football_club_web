@@ -124,6 +124,8 @@
   let announcements = [];
   let selectedEventId = '';
   let memberDirectoryLoadId = 0;
+  let attendanceLoadId = 0;
+  let attendanceRecordLoadId = 0;
   let toastTimer;
   let deferredInstallPrompt = null;
   let currentPushSubscription = null;
@@ -1884,7 +1886,7 @@
     scheduleWorkspace.hidden = true;
     scheduleError.hidden = true;
     createEventButton.hidden = !canManageSchedule(membership);
-    const { data, error } = await supabaseClient
+    let scheduleQuery = supabaseClient
       .from('events')
       .select(
         'id, club_id, title, description, venue, starts_at, ends_at, capacity, confirmed_count, waiting_count, registration_deadline, cancellation_deadline, status, cancellation_reason, reminder_at, reminder_sent_at, published_at, cancelled_at, created_at, updated_at',
@@ -1893,13 +1895,19 @@
       .gte('starts_at', monthRange.startsAt)
       .lt('starts_at', monthRange.endsAt)
       .order('starts_at', { ascending: true });
+    if (!canManageSchedule(membership)) {
+      scheduleQuery = scheduleQuery.eq('status', 'published');
+    }
+    const { data, error } = await scheduleQuery;
 
     if (error) {
       showScheduleError(`일정 조회 오류: ${error.message}`);
       return;
     }
 
-    scheduledEvents = data;
+    scheduledEvents = canManageSchedule(membership)
+      ? data
+      : data.filter((scheduleEvent) => scheduleEvent.status === 'published');
     selectedEventId = '';
     if (!selectedScheduleDate || selectedScheduleDate.slice(0, 7) !== scheduleMonth) {
       const today = currentKoreanDate();
@@ -2130,6 +2138,8 @@
   }
 
   function resetAttendance() {
+    attendanceLoadId += 1;
+    attendanceRecordLoadId += 1;
     attendanceEvents = [];
     attendanceLoading.hidden = false;
     attendanceNoClub.hidden = true;
@@ -2143,6 +2153,8 @@
   }
 
   function showAttendanceNoClub() {
+    attendanceLoadId += 1;
+    attendanceRecordLoadId += 1;
     attendanceEvents = [];
     attendanceLoading.hidden = true;
     attendanceWorkspace.hidden = true;
@@ -2162,7 +2174,7 @@
     const list = document.querySelector('[data-monthly-attendance-list]');
     list.replaceChildren();
     const statsByUser = new Map(stats.map((row) => [row.user_id, row]));
-    activeClubMembers.forEach(({ member }) => {
+    uniqueActiveClubMembers().forEach(({ member }) => {
       const stat = statsByUser.get(member.user_id) || {};
       const row = document.createElement('div');
       row.className = 'attendance-row';
@@ -2186,6 +2198,14 @@
     document.querySelector('[data-my-late-count]').textContent = mine.late_count || 0;
     document.querySelector('[data-my-attendance-rate]').textContent =
       mine.attendance_rate == null ? '—' : `${mine.attendance_rate}%`;
+  }
+
+  function uniqueActiveClubMembers() {
+    return Array.from(
+      new Map(
+        activeClubMembers.map((memberEntry) => [memberEntry.member.user_id, memberEntry]),
+      ).values(),
+    );
   }
 
   function createAttendanceRow(memberEntry, record) {
@@ -2222,11 +2242,14 @@
   }
 
   async function loadAttendanceRecords() {
+    const requestId = ++attendanceRecordLoadId;
     const eventId = attendanceEventSelect.value;
+    const clubId = activeClub?.club_id;
     const roster = document.querySelector('[data-attendance-roster]');
     roster.replaceChildren();
     if (!eventId) {
       attendanceStatus.textContent = '출석을 확인할 수 있는 시작된 일정이 없습니다.';
+      attendanceStatus.classList.remove('is-error');
       return;
     }
 
@@ -2235,6 +2258,11 @@
       .from('attendance_record_profiles')
       .select('event_id, club_id, user_id, status, checked_at, display_name')
       .eq('event_id', eventId);
+    if (
+      requestId !== attendanceRecordLoadId
+      || attendanceEventSelect.value !== eventId
+      || activeClub?.club_id !== clubId
+    ) return;
     if (error) {
       attendanceStatus.textContent = `출석 결과 오류: ${error.message}`;
       attendanceStatus.classList.add('is-error');
@@ -2243,9 +2271,14 @@
     attendanceStatus.textContent = '';
     attendanceStatus.classList.remove('is-error');
     const recordsByUser = new Map(data.map((record) => [record.user_id, record]));
-    activeClubMembers.forEach((memberEntry) => {
-      roster.append(createAttendanceRow(memberEntry, recordsByUser.get(memberEntry.member.user_id)));
+    const fragment = document.createDocumentFragment();
+    uniqueActiveClubMembers().forEach((memberEntry) => {
+      fragment.append(createAttendanceRow(
+        memberEntry,
+        recordsByUser.get(memberEntry.member.user_id),
+      ));
     });
+    roster.replaceChildren(fragment);
   }
 
   async function loadAttendance(membership) {
@@ -2253,7 +2286,11 @@
       showAttendanceNoClub();
       return;
     }
+    const loadId = ++attendanceLoadId;
+    attendanceRecordLoadId += 1;
+    const clubId = membership.club_id;
     if (!attendanceMonth.value) attendanceMonth.value = currentKoreanMonth();
+    const requestedMonth = attendanceMonth.value;
     attendanceLoading.hidden = false;
     attendanceNoClub.hidden = true;
     attendanceWorkspace.hidden = true;
@@ -2262,8 +2299,9 @@
     attendanceStatus.classList.remove('is-error');
     if (canManageSchedule(membership)) {
       const finalizeResult = await supabaseClient.rpc('finalize_club_attendance', {
-        p_club_id: membership.club_id,
+        p_club_id: clubId,
       });
+      if (loadId !== attendanceLoadId || activeClub?.club_id !== clubId) return;
       if (finalizeResult.error) {
         showAttendanceError(`자동 출석 확정 오류: ${finalizeResult.error.message}`);
         return;
@@ -2273,17 +2311,24 @@
       }
     }
     const previousEventId = attendanceEventSelect.value;
-    const monthStart = `${attendanceMonth.value}-01`;
+    const monthStart = `${requestedMonth}-01`;
     const [statsResult, eventsResult] = await Promise.all([
-      supabaseClient.from('monthly_attendance_stats').select('*').eq('club_id', membership.club_id).eq('month_start', monthStart),
-      supabaseClient.from('events').select('id, title, starts_at').eq('club_id', membership.club_id).eq('status', 'published').lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
+      supabaseClient.from('monthly_attendance_stats').select('*').eq('club_id', clubId).eq('month_start', monthStart),
+      supabaseClient.from('events').select('id, title, starts_at').eq('club_id', clubId).eq('status', 'published').lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
     ]);
+    if (
+      loadId !== attendanceLoadId
+      || activeClub?.club_id !== clubId
+      || attendanceMonth.value !== requestedMonth
+    ) return;
     if (statsResult.error || eventsResult.error) {
       showAttendanceError(`출석 현황 오류: ${(statsResult.error || eventsResult.error).message}`);
       return;
     }
     renderMonthlyAttendance(statsResult.data);
-    attendanceEvents = eventsResult.data;
+    attendanceEvents = Array.from(
+      new Map(eventsResult.data.map((scheduleEvent) => [scheduleEvent.id, scheduleEvent])).values(),
+    );
     attendanceEventSelect.replaceChildren();
     if (!attendanceEvents.length) {
       const option = document.createElement('option');
@@ -2843,7 +2888,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.8.0';
+    element.textContent = config?.appVersion || '1.8.1';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
