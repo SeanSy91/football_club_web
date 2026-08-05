@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.2.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.3.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.2\.0</);
-  assert.match(config, /appVersion: '1\.2\.0'/);
-  assert.match(readme, /`1\.2\.0`/);
+  assert.match(html, /data-app-version>1\.3\.0</);
+  assert.match(config, /appVersion: '1\.3\.0'/);
+  assert.match(readme, /`1\.3\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -241,7 +241,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.2\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.3\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -473,6 +473,36 @@ test('종료된 일정은 참가 확정자만 자동 참석 처리하고 관리�
   assert.match(migration, /event_responses_lock_after_attendance/);
   assert.match(script, /\.rpc\('finalize_club_attendance'/);
   assert.match(script, /Date\.now\(\) < new Date\(selectedScheduleEvent\.starts_at\)\.getTime\(\)/);
+});
+
+test('관리자 전용 출석 탭은 월별 회원 집계와 권한 제한을 제공한다', async () => {
+  const [html, css, script, migration] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/styles.css'),
+    readProjectFile('site/js/app.js'),
+    readProjectFile('supabase/migrations/202608050012_create_admin_attendance_report.sql'),
+  ]);
+
+  assert.match(html, /href="#attendance-admin"[^>]+data-manager-nav hidden/);
+  assert.match(html, /data-view="attendance-admin"/);
+  assert.match(html, /type="month" data-admin-attendance-month/);
+  assert.match(html, /data-admin-attendance-rows/);
+  assert.match(html, /<th scope="col">참석<\/th>/);
+  assert.match(html, /<th scope="col">불참<\/th>/);
+  assert.match(html, /<th scope="col">지각<\/th>/);
+  assert.match(html, /<th scope="col">결석<\/th>/);
+  assert.match(html, /<th scope="col">미처리<\/th>/);
+  assert.match(css, /\.admin-attendance-table-wrap/);
+  assert.match(script, /function updateManagerNavigation/);
+  assert.match(script, /route === 'attendance-admin' && !canManageSchedule\(\)/);
+  assert.match(script, /\.rpc\('get_admin_monthly_attendance'/);
+  assert.match(migration, /create or replace function public\.get_admin_monthly_attendance/);
+  assert.match(migration, /private\.can_manage_club\(p_club_id, v_user_id\)/);
+  assert.match(migration, /e\.attendance_finalized_at is not null/);
+  assert.match(migration, /when ar\.status = 'excused' then 'declared_absent'/);
+  assert.match(migration, /when ar\.status = 'absent' then 'no_show'/);
+  assert.match(migration, /when er\.status in \('waiting', 'cancelled'\) then 'excluded'/);
+  assert.match(migration, /grant execute on function public\.get_admin_monthly_attendance\(uuid, date\)/);
 });
 
 test('공지 화면은 목록, 오류 복구와 접근 가능한 관리 폼을 제공한다', async () => {

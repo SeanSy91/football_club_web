@@ -1617,6 +1617,72 @@ button {
   margin-top: 18px;
 }
 
+.admin-attendance-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-attendance-note {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.admin-attendance-table-wrap {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.admin-attendance-table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  background: white;
+}
+
+.admin-attendance-table th,
+.admin-attendance-table td {
+  padding: 15px 18px;
+  font-size: 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-attendance-table thead th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  background: #f7f5ed;
+}
+
+.admin-attendance-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 170px;
+  text-align: left;
+  background: white;
+}
+
+.admin-attendance-table tbody th strong,
+.admin-attendance-table tbody th span {
+  display: block;
+}
+
+.admin-attendance-table tbody th span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.admin-attendance-table tbody tr:last-child th,
+.admin-attendance-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .announcement-heading {
   display: flex;
   max-width: none;
@@ -2397,6 +2463,14 @@ button {
     backdrop-filter: blur(16px);
   }
 
+  .mobile-nav.has-manager-link {
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .admin-attendance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mobile-nav a {
     display: grid;
     gap: 3px;
@@ -2441,6 +2515,26 @@ button {
   .attendance-heading {
     display: grid;
     align-items: start;
+  }
+
+  .admin-attendance-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-attendance-metrics article {
+    padding: 24px 20px;
+  }
+
+  .admin-attendance-metrics strong {
+    font-size: 40px;
+  }
+
+  .admin-attendance-table-wrap {
+    margin-right: -16px;
+    margin-left: -16px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
   }
 
   .schedule-heading,

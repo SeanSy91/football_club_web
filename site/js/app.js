@@ -70,6 +70,13 @@
   const attendanceMonth = document.querySelector('[data-attendance-month]');
   const attendanceEventSelect = document.querySelector('[data-attendance-event]');
   const attendanceStatus = document.querySelector('[data-attendance-status]');
+  const adminAttendanceMonth = document.querySelector('[data-admin-attendance-month]');
+  const adminAttendanceLoading = document.querySelector('[data-admin-attendance-loading]');
+  const adminAttendanceUnauthorized = document.querySelector('[data-admin-attendance-unauthorized]');
+  const adminAttendanceWorkspace = document.querySelector('[data-admin-attendance-workspace]');
+  const adminAttendanceError = document.querySelector('[data-admin-attendance-error]');
+  const adminAttendanceStatus = document.querySelector('[data-admin-attendance-status]');
+  const adminAttendanceRows = document.querySelector('[data-admin-attendance-rows]');
   const announcementLoading = document.querySelector('[data-announcement-loading]');
   const announcementNoClub = document.querySelector('[data-announcement-no-club]');
   const announcementWorkspace = document.querySelector('[data-announcement-workspace]');
@@ -125,6 +132,9 @@
     }
     if (authReady && session && route === 'login') {
       return 'profile';
+    }
+    if (authReady && session && route === 'attendance-admin' && !canManageSchedule()) {
+      return activeClub ? 'attendance' : 'club';
     }
     return route;
   }
@@ -589,6 +599,7 @@
     activeClubMembers = [];
     memberDirectoryLoadId += 1;
     resetAttendance();
+    resetAdminAttendance();
     resetSchedule();
     resetAnnouncements();
     clubLoading.hidden = false;
@@ -857,6 +868,7 @@
 
   async function showClubDashboard(membership, createdInviteCode = '') {
     activeClub = membership;
+    updateManagerNavigation(membership);
     clubLoading.hidden = true;
     clubOnboarding.hidden = true;
     clubDashboard.hidden = false;
@@ -891,11 +903,20 @@
 
     await loadSchedule(membership);
     await loadAttendance(membership);
+    await loadAdminAttendance(membership);
     await loadAnnouncements(membership);
   }
 
   function canManageSchedule(membership = activeClub) {
     return ['owner', 'admin'].includes(membership?.role);
+  }
+
+  function updateManagerNavigation(membership = activeClub) {
+    const canManage = canManageSchedule(membership);
+    document.querySelectorAll('[data-manager-nav]').forEach((link) => {
+      link.hidden = !canManage;
+    });
+    document.querySelector('.mobile-nav')?.classList.toggle('has-manager-link', canManage);
   }
 
   function eventStatusLabel(status) {
@@ -1865,6 +1886,101 @@
     showToast('출석 상태를 저장했습니다.');
   }
 
+  function resetAdminAttendance() {
+    updateManagerNavigation(null);
+    adminAttendanceLoading.hidden = false;
+    adminAttendanceUnauthorized.hidden = true;
+    adminAttendanceWorkspace.hidden = true;
+    adminAttendanceError.hidden = true;
+    adminAttendanceStatus.textContent = '';
+    adminAttendanceRows.replaceChildren();
+  }
+
+  function showAdminAttendanceUnauthorized() {
+    adminAttendanceLoading.hidden = true;
+    adminAttendanceWorkspace.hidden = true;
+    adminAttendanceError.hidden = true;
+    adminAttendanceUnauthorized.hidden = false;
+  }
+
+  function showAdminAttendanceError(message) {
+    adminAttendanceLoading.hidden = true;
+    adminAttendanceUnauthorized.hidden = true;
+    adminAttendanceWorkspace.hidden = true;
+    adminAttendanceError.hidden = false;
+    document.querySelector('[data-admin-attendance-error-message]').textContent = message;
+  }
+
+  function renderAdminAttendance(rows) {
+    adminAttendanceRows.replaceChildren();
+    rows.forEach((member) => {
+      const row = document.createElement('tr');
+      const memberCell = document.createElement('th');
+      memberCell.scope = 'row';
+      const name = document.createElement('strong');
+      name.textContent = member.display_name;
+      const role = document.createElement('span');
+      role.textContent = roleLabel(member.member_role);
+      memberCell.append(name, role);
+      [
+        member.attended_count,
+        member.declared_absent_count,
+        member.late_count,
+        member.no_show_count,
+        member.unprocessed_count,
+      ].forEach((value) => {
+        const cell = document.createElement('td');
+        cell.textContent = value || 0;
+        row.append(cell);
+      });
+      row.prepend(memberCell);
+      adminAttendanceRows.append(row);
+    });
+
+    const totals = rows.reduce(
+      (result, member) => ({
+        attended: result.attended + (member.attended_count || 0),
+        declaredAbsent: result.declaredAbsent + (member.declared_absent_count || 0),
+        late: result.late + (member.late_count || 0),
+        noShow: result.noShow + (member.no_show_count || 0),
+      }),
+      { attended: 0, declaredAbsent: 0, late: 0, noShow: 0 },
+    );
+    document.querySelector('[data-admin-total-attended]').textContent = totals.attended;
+    document.querySelector('[data-admin-total-declared-absent]').textContent = totals.declaredAbsent;
+    document.querySelector('[data-admin-total-late]').textContent = totals.late;
+    document.querySelector('[data-admin-total-no-show]').textContent = totals.noShow;
+    adminAttendanceStatus.textContent = rows.length
+      ? `활성 회원 ${rows.length}명의 월별 집계입니다.`
+      : '집계할 활성 회원이 없습니다.';
+  }
+
+  async function loadAdminAttendance(membership = activeClub) {
+    if (!canManageSchedule(membership)) {
+      showAdminAttendanceUnauthorized();
+      return;
+    }
+    if (!adminAttendanceMonth.value) adminAttendanceMonth.value = currentKoreanMonth();
+    adminAttendanceLoading.hidden = false;
+    adminAttendanceUnauthorized.hidden = true;
+    adminAttendanceWorkspace.hidden = true;
+    adminAttendanceError.hidden = true;
+    adminAttendanceStatus.textContent = '';
+
+    const { data, error } = await supabaseClient.rpc('get_admin_monthly_attendance', {
+      p_club_id: membership.club_id,
+      p_month_start: `${adminAttendanceMonth.value}-01`,
+    });
+    if (error) {
+      showAdminAttendanceError(`관리자 출석 조회 오류: ${error.message}`);
+      return;
+    }
+
+    renderAdminAttendance(data || []);
+    adminAttendanceLoading.hidden = true;
+    adminAttendanceWorkspace.hidden = false;
+  }
+
   function announcementDisplayStatus(announcement) {
     if (announcement.status !== 'published') return announcement.status;
     const now = Date.now();
@@ -2249,7 +2365,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.2.0';
+    element.textContent = config?.appVersion || '1.3.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2329,6 +2445,12 @@
   attendanceEventSelect?.addEventListener('change', loadAttendanceRecords);
   document.querySelector('[data-attendance-retry]')?.addEventListener('click', () => {
     if (activeClub) loadAttendance(activeClub);
+  });
+  adminAttendanceMonth?.addEventListener('change', () => {
+    if (activeClub) loadAdminAttendance(activeClub);
+  });
+  document.querySelector('[data-admin-attendance-retry]')?.addEventListener('click', () => {
+    if (activeClub) loadAdminAttendance(activeClub);
   });
   createAnnouncementButton?.addEventListener('click', () => openAnnouncementForm());
   announcementForm?.addEventListener('submit', saveAnnouncement);
