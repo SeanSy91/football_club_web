@@ -1931,6 +1931,119 @@ button {
   margin-top: 0;
 }
 
+.notification-panel {
+  padding: 30px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+}
+
+.notification-panel-heading {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.notification-panel-heading h2 {
+  margin: 8px 0 10px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.notification-panel-heading p:not(.eyebrow) {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.notification-device-state {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--lime-soft);
+  border-radius: 999px;
+}
+
+.notification-device-state.is-error {
+  color: #8c3327;
+  background: #f8e6e2;
+}
+
+.notification-fieldset {
+  margin: 26px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.notification-fieldset legend {
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.notification-option {
+  display: flex;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px;
+  cursor: pointer;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.notification-option:has(input:checked) {
+  border-color: var(--green-bright);
+  box-shadow: inset 0 0 0 1px var(--green-bright);
+}
+
+.notification-option input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--green);
+}
+
+.notification-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.notification-option strong {
+  font-size: 13px;
+}
+
+.notification-option small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.notification-fieldset:disabled .notification-option {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.notification-actions .secondary-button {
+  margin-top: 0;
+}
+
 .account-panel {
   display: flex;
   gap: 28px;
@@ -2437,6 +2550,14 @@ button {
     margin-top: 38px;
   }
 
+  .notification-panel-heading {
+    display: grid;
+  }
+
+  .notification-device-state {
+    justify-self: start;
+  }
+
   .account-panel {
     align-items: flex-start;
   }
@@ -2565,6 +2686,24 @@ button {
 
   .account-panel {
     display: grid;
+  }
+
+  .notification-panel {
+    padding: 24px 20px;
+  }
+
+  .notification-option-grid,
+  .notification-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-option-grid,
+  .notification-actions {
+    display: grid;
+  }
+
+  .notification-actions button {
+    width: 100%;
   }
 
   .account-panel .danger-button {

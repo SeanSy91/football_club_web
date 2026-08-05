@@ -60,6 +60,65 @@ test('사이트는 홈 화면 설치가 가능한 PWA 기반과 필수 규격 �
   assert.match(script, /홈 화면에 추가/);
 });
 
+test('내 정보 화면은 사용자별 푸시 알림 종류 설정을 제공한다', async () => {
+  const [html, css, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/styles.css'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-notification-form/);
+  assert.match(html, /data-notification-device-status/);
+  assert.match(html, /name="eventCreated" type="checkbox"/);
+  assert.match(html, /name="eventUpdated" type="checkbox"/);
+  assert.match(html, /name="eventCancelled" type="checkbox"/);
+  assert.match(html, /name="waitlistPromoted" type="checkbox"/);
+  assert.match(html, /name="announcementPublished" type="checkbox"/);
+  assert.match(html, /name="eventReminder" type="checkbox"/);
+  assert.match(html, /aria-live="polite" data-notification-status/);
+  assert.match(css, /\.notification-option-grid/);
+  assert.match(css, /\.notification-fieldset:disabled/);
+  assert.match(script, /\.rpc\('get_my_notification_settings'/);
+  assert.match(script, /\.rpc\('update_my_notification_settings'/);
+  assert.match(script, /'PushManager' in window/);
+  assert.doesNotMatch(script, /\.from\('notification_preferences'\)/);
+  assert.doesNotMatch(script, /\.from\('push_subscriptions'\)/);
+});
+
+test('푸시 구독 마이그레이션은 비공개 저장, 본인·회원 검증과 탈퇴 비활성화를 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608050013_create_push_subscriptions.sql',
+  );
+
+  assert.match(migration, /create table if not exists public\.notification_preferences/);
+  assert.match(migration, /create table if not exists public\.push_subscriptions/);
+  assert.match(migration, /foreign key \(club_id, user_id\)[\s\S]+references public\.club_members/);
+  assert.match(migration, /alter table public\.notification_preferences enable row level security/);
+  assert.match(migration, /alter table public\.push_subscriptions enable row level security/);
+  assert.match(migration, /revoke all on table public\.notification_preferences from anon, authenticated/);
+  assert.match(migration, /revoke all on table public\.push_subscriptions from anon, authenticated/);
+  assert.match(migration, /private\.require_active_notification_member/);
+  assert.match(migration, /cm\.status = 'active'/);
+  assert.match(migration, /p\.account_status = 'active'/);
+  assert.match(migration, /create or replace function public\.get_my_notification_settings/);
+  assert.match(migration, /create or replace function public\.update_my_notification_settings/);
+  assert.match(migration, /create or replace function public\.save_my_push_subscription/);
+  assert.match(migration, /create or replace function public\.disable_my_push_subscription/);
+  assert.match(migration, /where public\.push_subscriptions\.user_id = v_user_id/);
+  assert.match(migration, /club_members_deactivate_push_subscriptions/);
+  assert.match(migration, /old\.status = 'active' and new\.status <> 'active'/);
+  assert.match(migration, /grant execute on function public\.get_my_notification_settings\(uuid\)/);
+  assert.doesNotMatch(migration, /grant (select|insert|update|delete) on table public\.push_subscriptions/i);
+});
+
+test('개인정보 안내는 푸시 구독 정보와 비활성화 기준을 설명한다', async () => {
+  const html = await readProjectFile('site/index.html');
+
+  assert.match(html, /브라우저 구독 주소, 기기별 암호화 키와 선택한 알림 종류/);
+  assert.match(html, /알림 구독은 본인이 끄거나 클럽 활동이 중단되면 비활성화/);
+  assert.match(html, /시행 및 최종 수정: 2026년 8월 5일/);
+});
+
 test('프레임워크와 비밀 서버 키를 정적 사이트에 포함하지 않는다', async () => {
   const [html, config, script] = await Promise.all([
     readProjectFile('site/index.html'),
@@ -259,16 +318,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.5.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.6.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.5\.0</);
-  assert.match(config, /appVersion: '1\.5\.0'/);
-  assert.match(readme, /`1\.5\.0`/);
+  assert.match(html, /data-app-version>1\.6\.0</);
+  assert.match(config, /appVersion: '1\.6\.0'/);
+  assert.match(readme, /`1\.6\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -280,7 +339,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.5\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.6\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);

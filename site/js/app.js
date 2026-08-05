@@ -32,6 +32,12 @@
   const profileBioCount = document.querySelector('[data-profile-bio-count]');
   const accountDeletionStatus = document.querySelector('[data-account-deletion-status]');
   const requestAccountDeletionButton = document.querySelector('[data-request-account-deletion]');
+  const notificationForm = document.querySelector('[data-notification-form]');
+  const notificationFieldset = document.querySelector('[data-notification-fieldset]');
+  const notificationStatus = document.querySelector('[data-notification-status]');
+  const notificationSaveButton = document.querySelector('[data-notification-save]');
+  const notificationDeviceStatus = document.querySelector('[data-notification-device-status]');
+  const enablePushButton = document.querySelector('[data-enable-push]');
   const clubLoading = document.querySelector('[data-club-loading]');
   const clubOnboarding = document.querySelector('[data-club-onboarding]');
   const clubDashboard = document.querySelector('[data-club-dashboard]');
@@ -316,6 +322,101 @@
     accountDeletionStatus.textContent = '로그인 후 계정과 개인정보 설정을 확인할 수 있습니다.';
     accountDeletionStatus.classList.remove('is-error');
     profileForm.hidden = true;
+  }
+
+  function setNotificationStatus(message, isError = false) {
+    notificationStatus.textContent = message;
+    notificationStatus.classList.toggle('is-error', isError);
+  }
+
+  function resetNotificationSettings() {
+    notificationForm.reset();
+    notificationFieldset.disabled = true;
+    notificationSaveButton.disabled = true;
+    enablePushButton.disabled = true;
+    notificationDeviceStatus.textContent = '클럽 가입 후 설정할 수 있습니다.';
+    notificationDeviceStatus.classList.remove('is-error');
+    setNotificationStatus('');
+  }
+
+  function updateNotificationDeviceStatus(activeSubscriptionCount) {
+    const supportsPush = 'serviceWorker' in navigator
+      && 'PushManager' in window
+      && 'Notification' in window;
+    notificationDeviceStatus.classList.toggle('is-error', !supportsPush);
+    if (!supportsPush) {
+      notificationDeviceStatus.textContent = '이 브라우저는 푸시 알림을 지원하지 않습니다.';
+      return;
+    }
+    notificationDeviceStatus.textContent = activeSubscriptionCount > 0
+      ? `연결된 알림 기기 ${activeSubscriptionCount}개`
+      : '기기 알림 연결 준비 중';
+  }
+
+  function fillNotificationSettings(settings) {
+    notificationForm.elements.eventCreated.checked = settings.event_created;
+    notificationForm.elements.eventUpdated.checked = settings.event_updated;
+    notificationForm.elements.eventCancelled.checked = settings.event_cancelled;
+    notificationForm.elements.waitlistPromoted.checked = settings.waitlist_promoted;
+    notificationForm.elements.announcementPublished.checked = settings.announcement_published;
+    notificationForm.elements.eventReminder.checked = settings.event_reminder;
+  }
+
+  async function loadNotificationSettings(membership = activeClub) {
+    if (!membership) {
+      resetNotificationSettings();
+      return;
+    }
+
+    notificationFieldset.disabled = true;
+    notificationSaveButton.disabled = true;
+    notificationDeviceStatus.textContent = '알림 설정을 확인하고 있습니다.';
+    notificationDeviceStatus.classList.remove('is-error');
+    setNotificationStatus('');
+    const { data, error } = await supabaseClient
+      .rpc('get_my_notification_settings', { p_club_id: membership.club_id })
+      .single();
+
+    if (error) {
+      notificationDeviceStatus.textContent = '알림 설정을 준비하지 못했습니다.';
+      notificationDeviceStatus.classList.add('is-error');
+      setNotificationStatus(`13번째 SQL 적용 상태를 확인해 주세요: ${error.message}`, true);
+      return;
+    }
+
+    fillNotificationSettings(data);
+    notificationFieldset.disabled = false;
+    notificationSaveButton.disabled = false;
+    updateNotificationDeviceStatus(data.active_subscription_count);
+    setNotificationStatus('알림 종류를 선택한 뒤 저장할 수 있습니다.');
+  }
+
+  async function saveNotificationSettings(event) {
+    event.preventDefault();
+    if (!activeClub || notificationFieldset.disabled) return;
+
+    notificationFieldset.disabled = true;
+    notificationSaveButton.disabled = true;
+    setNotificationStatus('알림 설정을 저장하고 있습니다.');
+    const { error } = await supabaseClient.rpc('update_my_notification_settings', {
+      p_club_id: activeClub.club_id,
+      p_event_created: notificationForm.elements.eventCreated.checked,
+      p_event_updated: notificationForm.elements.eventUpdated.checked,
+      p_event_cancelled: notificationForm.elements.eventCancelled.checked,
+      p_waitlist_promoted: notificationForm.elements.waitlistPromoted.checked,
+      p_announcement_published: notificationForm.elements.announcementPublished.checked,
+      p_event_reminder: notificationForm.elements.eventReminder.checked,
+    });
+    notificationFieldset.disabled = false;
+    notificationSaveButton.disabled = false;
+
+    if (error) {
+      setNotificationStatus(`저장하지 못했습니다: ${error.message}`, true);
+      return;
+    }
+
+    setNotificationStatus('알림 설정을 저장했습니다.');
+    showToast('알림 설정을 저장했습니다.');
   }
 
   async function resolveAvatarUrl(profile) {
@@ -657,6 +758,7 @@
     resetAdminAttendance();
     resetSchedule();
     resetAnnouncements();
+    resetNotificationSettings();
     clubLoading.hidden = false;
     clubLoading.lastChild.textContent = ' 클럽 정보를 확인하고 있습니다.';
     clubOnboarding.hidden = true;
@@ -937,6 +1039,8 @@
     if (createdInviteCode) {
       document.querySelector('[data-new-invite-code]').textContent = createdInviteCode;
     }
+
+    await loadNotificationSettings(membership);
 
     try {
       await loadClubMembers(membership.club_id);
@@ -2462,7 +2566,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.5.0';
+    element.textContent = config?.appVersion || '1.6.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2473,6 +2577,7 @@
   profilePhotoInput?.addEventListener('change', handleProfilePhoto);
   profilePhotoRemoveButton?.addEventListener('click', useDefaultProfileAvatar);
   profileForm?.addEventListener('submit', saveProfile);
+  notificationForm?.addEventListener('submit', saveNotificationSettings);
   requestAccountDeletionButton?.addEventListener('click', requestAccountDeletion);
   profileBioInput?.addEventListener('input', () => {
     profileBioCount.textContent = profileBioInput.value.length;
