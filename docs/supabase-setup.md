@@ -174,3 +174,23 @@ SQL 실행 후 총관리자 계정으로 클럽 화면을 새로고침한다. �
 - Auth 계정 삭제 때 일정·공지·출석 작성자 참조를 `null`로 정리하는 외래 키
 
 정적 사이트는 서비스 역할 키를 사용하지 않는다. 최종 삭제는 `docs/operations.md`의 절차에 따라 프로필 사진을 Storage에서 먼저 제거하고 Supabase Dashboard의 **Authentication → Users**에서 처리한다.
+
+## 13. 웹 푸시 구독
+
+SQL Editor에서 `supabase/migrations/202608050013_create_push_subscriptions.sql`을 실행한다.
+회원별 알림 선택값과 브라우저 푸시 구독을 저장하며, 구독 원문은 본인도 직접 조회할 수 없고
+보안 서버 함수와 Edge Function만 사용한다. VAPID 키와 함수 배포는
+`docs/push-notifications.md`를 따른다.
+
+## 14. 일정 예약 알림과 관리자 즉시 알림
+
+SQL Editor에서 `supabase/migrations/202608050014_add_event_push_notifications.sql`을 실행한다.
+
+- 일정별 예약 알림 시각과 전송 처리 상태
+- 오늘 공개 일정의 참가 확정자에게 보내는 owner/admin 전용 알림
+- 5분 재전송 제한과 알림 요청 결과 기록
+- Supabase Vault의 자동화 비밀값과 5분 간격 Cron 작업
+- 회원별 일정 알림 및 관리자 경기 안내 수신 설정
+
+예약 시각이 지나면 다음 Cron 주기에 처리되므로 실제 전송은 최대 약 5분 늦을 수 있다. 실행 후
+Edge Function을 `docs/push-notifications.md`의 명령으로 다시 배포한다.

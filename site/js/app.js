@@ -69,6 +69,11 @@
   const eventSaveButton = document.querySelector('[data-event-save]');
   const eventFormStatus = document.querySelector('[data-event-form-status]');
   const eventParticipation = document.querySelector('[data-event-participation]');
+  const eventPushPanel = document.querySelector('[data-event-push-panel]');
+  const eventPushForm = document.querySelector('[data-event-push-form]');
+  const eventPushStatus = document.querySelector('[data-event-push-status]');
+  const eventPushSendButton = document.querySelector('[data-event-push-send]');
+  const reminderCustomField = document.querySelector('[data-reminder-custom-field]');
   const participationActions = document.querySelector('[data-participation-actions]');
   const participationStatus = document.querySelector('[data-participation-status]');
   const applyEventButton = document.querySelector('[data-apply-event]');
@@ -519,6 +524,7 @@
     notificationForm.elements.waitlistPromoted.checked = settings.waitlist_promoted;
     notificationForm.elements.announcementPublished.checked = settings.announcement_published;
     notificationForm.elements.eventReminder.checked = settings.event_reminder;
+    notificationForm.elements.adminEventMessage.checked = settings.admin_event_message;
   }
 
   async function loadNotificationSettings(membership = activeClub) {
@@ -533,13 +539,13 @@
     notificationDeviceStatus.classList.remove('is-error');
     setNotificationStatus('');
     const { data, error } = await supabaseClient
-      .rpc('get_my_notification_settings', { p_club_id: membership.club_id })
+      .rpc('get_my_notification_settings_v2', { p_club_id: membership.club_id })
       .single();
 
     if (error) {
       notificationDeviceStatus.textContent = '알림 설정을 준비하지 못했습니다.';
       notificationDeviceStatus.classList.add('is-error');
-      setNotificationStatus(`13번째 SQL 적용 상태를 확인해 주세요: ${error.message}`, true);
+      setNotificationStatus(`14번째 SQL 적용 상태를 확인해 주세요: ${error.message}`, true);
       return;
     }
 
@@ -557,7 +563,7 @@
     notificationFieldset.disabled = true;
     notificationSaveButton.disabled = true;
     setNotificationStatus('알림 설정을 저장하고 있습니다.');
-    const { error } = await supabaseClient.rpc('update_my_notification_settings', {
+    const { error } = await supabaseClient.rpc('update_my_notification_settings_v2', {
       p_club_id: activeClub.club_id,
       p_event_created: notificationForm.elements.eventCreated.checked,
       p_event_updated: notificationForm.elements.eventUpdated.checked,
@@ -565,6 +571,7 @@
       p_waitlist_promoted: notificationForm.elements.waitlistPromoted.checked,
       p_announcement_published: notificationForm.elements.announcementPublished.checked,
       p_event_reminder: notificationForm.elements.eventReminder.checked,
+      p_admin_event_message: notificationForm.elements.adminEventMessage.checked,
     });
     notificationFieldset.disabled = false;
     notificationSaveButton.disabled = false;
@@ -1355,6 +1362,7 @@
     eventDetail.hidden = true;
     eventForm.hidden = true;
     eventParticipation.hidden = true;
+    eventPushPanel.hidden = true;
   }
 
   function showScheduleNoClub() {
@@ -1526,7 +1534,28 @@
     eventResponses = [];
     eventForm.hidden = true;
     eventDetail.hidden = true;
+    eventPushPanel.hidden = true;
     eventListView.hidden = false;
+  }
+
+  function renderEventPushPanel(scheduleEvent, confirmedCount) {
+    const canSend = canManageSchedule()
+      && scheduleEvent.status === 'published'
+      && koreanDateKey(scheduleEvent.starts_at) === currentKoreanDate();
+    eventPushPanel.hidden = !canSend;
+    if (!canSend) return;
+
+    document.querySelector('[data-event-push-recipient-count]').textContent = `${confirmedCount}명`;
+    eventPushSendButton.disabled = confirmedCount === 0;
+    if (eventPushForm.dataset.eventId !== scheduleEvent.id) {
+      eventPushForm.reset();
+      eventPushForm.dataset.eventId = scheduleEvent.id;
+      eventPushForm.elements.pushTitle.value = '오늘 경기 안내';
+      eventPushStatus.textContent = confirmedCount
+        ? '알림 내용을 입력해 주세요.'
+        : '현재 참가 확정자가 없어 알림을 보낼 수 없습니다.';
+      eventPushStatus.classList.remove('is-error');
+    }
   }
 
   function responseStatusLabel(status, waitPosition = null) {
@@ -1611,6 +1640,7 @@
 
   async function loadEventResponses(scheduleEvent) {
     eventResponses = [];
+    eventPushPanel.hidden = true;
     eventParticipation.hidden = scheduleEvent.status === 'draft';
     if (scheduleEvent.status === 'draft') return;
 
@@ -1658,6 +1688,7 @@
     document.querySelector('[data-waiting-count]').textContent = waiting.length;
     document.querySelector('[data-absent-count]').textContent = absent.length;
     document.querySelector('[data-unanswered-count]').textContent = unanswered.length;
+    renderEventPushPanel(scheduleEvent, confirmed.length);
 
     const myResponse = data.find((response) => response.user_id === session.user.id);
     document.querySelector('[data-my-response]').textContent = myResponse
@@ -1685,6 +1716,45 @@
     const eventId = selectedEventId;
     await loadSchedule(activeClub);
     await showEventDetail(eventId, false);
+  }
+
+  async function sendEventPushMessage(event) {
+    event.preventDefault();
+    const scheduleEvent = scheduledEvents.find((item) => item.id === selectedEventId);
+    const confirmedCount = eventResponses.filter((response) => response.status === 'confirmed').length;
+    if (
+      !scheduleEvent
+      || !canManageSchedule()
+      || scheduleEvent.status !== 'published'
+      || koreanDateKey(scheduleEvent.starts_at) !== currentKoreanDate()
+      || !eventPushForm.reportValidity()
+      || !confirmedCount
+    ) return;
+
+    if (!window.confirm(`참가 확정자 ${confirmedCount}명에게 이 알림을 보낼까요?`)) return;
+
+    eventPushSendButton.disabled = true;
+    eventPushStatus.textContent = '참석자 알림을 전송하고 있습니다.';
+    eventPushStatus.classList.remove('is-error');
+    try {
+      const result = await invokePushFunction({
+        action: 'event-message',
+        clubId: activeClub.club_id,
+        eventId: scheduleEvent.id,
+        title: eventPushForm.elements.pushTitle.value.trim(),
+        body: eventPushForm.elements.pushBody.value.trim(),
+      });
+      eventPushStatus.textContent = result.sentCount
+        ? `알림을 ${result.eligibleUserCount}명의 ${result.sentCount}개 기기로 전송했습니다.`
+        : `대상 ${result.eligibleUserCount}명 중 알림을 켠 기기가 없어 전송된 알림이 없습니다.`;
+      eventPushForm.elements.pushBody.value = '';
+      showToast('오늘 참석자 알림 처리를 완료했습니다.');
+    } catch (error) {
+      eventPushStatus.textContent = `알림을 보내지 못했습니다: ${error.message}`;
+      eventPushStatus.classList.add('is-error');
+    } finally {
+      eventPushSendButton.disabled = false;
+    }
   }
 
   function setParticipationBusy(busy) {
@@ -1779,6 +1849,11 @@
       formatKoreanDateTime(scheduleEvent.registration_deadline);
     document.querySelector('[data-event-detail-cancellation]').textContent =
       formatKoreanDateTime(scheduleEvent.cancellation_deadline);
+    document.querySelector('[data-event-detail-reminder]').textContent = scheduleEvent.reminder_at
+      ? scheduleEvent.reminder_sent_at
+        ? `${formatKoreanDateTime(scheduleEvent.reminder_at)} · 전송 완료`
+        : `${formatKoreanDateTime(scheduleEvent.reminder_at)} · 예약됨`
+      : '알림 없음';
     document.querySelector('[data-event-detail-description]').textContent =
       scheduleEvent.description || '등록된 안내가 없습니다.';
 
@@ -1812,7 +1887,7 @@
     const { data, error } = await supabaseClient
       .from('events')
       .select(
-        'id, club_id, title, description, venue, starts_at, ends_at, capacity, confirmed_count, waiting_count, registration_deadline, cancellation_deadline, status, cancellation_reason, published_at, cancelled_at, created_at, updated_at',
+        'id, club_id, title, description, venue, starts_at, ends_at, capacity, confirmed_count, waiting_count, registration_deadline, cancellation_deadline, status, cancellation_reason, reminder_at, reminder_sent_at, published_at, cancelled_at, created_at, updated_at',
       )
       .eq('club_id', membership.club_id)
       .gte('starts_at', monthRange.startsAt)
@@ -1844,6 +1919,39 @@
     }
   }
 
+  function syncEventReminderInput() {
+    const preset = eventForm.elements.reminderPreset.value;
+    const reminderInput = eventForm.elements.reminderAt;
+    const isCustom = preset === 'custom';
+    reminderCustomField.hidden = !isCustom;
+    reminderInput.required = isCustom;
+
+    if (preset === 'none') {
+      reminderInput.value = '';
+      return;
+    }
+    if (isCustom) return;
+
+    const startsAtValue = eventForm.elements.startsAt.value;
+    const startsAt = koreanDateTimeLocalToIso(startsAtValue);
+    if (!startsAt) {
+      reminderInput.value = '';
+      return;
+    }
+
+    if (preset === 'day-before-20') {
+      const previousEvening = new Date(`${startsAtValue.slice(0, 10)}T20:00:00+09:00`);
+      previousEvening.setTime(previousEvening.getTime() - 24 * 60 * 60 * 1000);
+      reminderInput.value = toKoreanDateTimeLocal(previousEvening);
+      return;
+    }
+
+    const minutesBefore = Number(preset);
+    reminderInput.value = Number.isFinite(minutesBefore)
+      ? toKoreanDateTimeLocal(new Date(new Date(startsAt).getTime() - minutesBefore * 60 * 1000))
+      : '';
+  }
+
   function openEventForm(scheduleEvent = null, preferredDate = '') {
     if (!canManageSchedule()) return;
     eventForm.reset();
@@ -1866,6 +1974,10 @@
         toKoreanDateTimeLocal(scheduleEvent.cancellation_deadline);
       eventForm.elements.capacity.value = scheduleEvent.capacity;
       eventForm.elements.description.value = scheduleEvent.description || '';
+      eventForm.elements.reminderPreset.value = scheduleEvent.reminder_at ? 'custom' : 'none';
+      eventForm.elements.reminderAt.value = scheduleEvent.reminder_at
+        ? toKoreanDateTimeLocal(scheduleEvent.reminder_at)
+        : '';
     } else {
       const preferredStart = /^\d{4}-\d{2}-\d{2}$/.test(preferredDate)
         ? new Date(`${preferredDate}T20:00:00+09:00`)
@@ -1886,7 +1998,10 @@
       eventForm.elements.registrationDeadline.value = toKoreanDateTimeLocal(registrationDeadline);
       eventForm.elements.cancellationDeadline.value = toKoreanDateTimeLocal(cancellationDeadline);
       eventForm.elements.capacity.value = 18;
+      eventForm.elements.reminderPreset.value = '120';
     }
+
+    syncEventReminderInput();
 
     eventListView.hidden = true;
     eventDetail.hidden = true;
@@ -1910,6 +2025,7 @@
 
   function eventFormRpcParameters() {
     return {
+      p_event_id: eventForm.dataset.eventId || null,
       p_club_id: activeClub.club_id,
       p_title: eventForm.elements.title.value.trim(),
       p_description: eventForm.elements.description.value.trim() || null,
@@ -1923,6 +2039,9 @@
       p_cancellation_deadline: koreanDateTimeLocalToIso(
         eventForm.elements.cancellationDeadline.value,
       ),
+      p_reminder_at: eventForm.elements.reminderAt.value
+        ? koreanDateTimeLocalToIso(eventForm.elements.reminderAt.value)
+        : null,
     };
   }
 
@@ -1931,19 +2050,17 @@
     if (!canManageSchedule() || !eventForm.reportValidity()) return;
     const eventId = eventForm.dataset.eventId;
     const parameters = eventFormRpcParameters();
-    const rpcName = eventId ? 'update_event' : 'create_event';
-    if (eventId) parameters.p_event_id = eventId;
 
     eventSaveButton.disabled = true;
     setEventFormStatus(eventId ? '일정 변경을 저장하고 있습니다.' : '일정을 임시 저장하고 있습니다.');
-    const { data, error } = await supabaseClient.rpc(rpcName, parameters);
+    const { data, error } = await supabaseClient.rpc('save_event_with_reminder', parameters);
     eventSaveButton.disabled = false;
     if (error) {
       setEventFormStatus(error.message, true);
       return;
     }
 
-    const savedEventId = eventId || data;
+    const savedEventId = data;
     const savedDate = eventForm.elements.startsAt.value.slice(0, 10);
     scheduleMonth = savedDate.slice(0, 7);
     selectedScheduleDate = savedDate;
@@ -2726,7 +2843,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.7.0';
+    element.textContent = config?.appVersion || '1.8.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2794,6 +2911,11 @@
     await loadSchedule(activeClub, { focusCalendarDate: true });
   });
   eventForm?.addEventListener('submit', saveEvent);
+  eventForm?.elements.reminderPreset?.addEventListener('change', syncEventReminderInput);
+  eventForm?.elements.startsAt?.addEventListener('change', () => {
+    if (eventForm.elements.reminderPreset.value !== 'custom') syncEventReminderInput();
+  });
+  eventPushForm?.addEventListener('submit', sendEventPushMessage);
   document.querySelector('[data-event-form-cancel]')?.addEventListener('click', closeEventForm);
   document.querySelector('[data-event-back]')?.addEventListener('click', showEventList);
   document.querySelector('[data-edit-event]')?.addEventListener('click', () => {

@@ -82,11 +82,12 @@ test('내 정보 화면은 사용자별 푸시 알림 종류 설정을 제공한
   assert.match(html, /name="waitlistPromoted" type="checkbox"/);
   assert.match(html, /name="announcementPublished" type="checkbox"/);
   assert.match(html, /name="eventReminder" type="checkbox"/);
+  assert.match(html, /name="adminEventMessage" type="checkbox"/);
   assert.match(html, /aria-live="polite" data-notification-status/);
   assert.match(css, /\.notification-option-grid/);
   assert.match(css, /\.notification-fieldset:disabled/);
-  assert.match(script, /\.rpc\('get_my_notification_settings'/);
-  assert.match(script, /\.rpc\('update_my_notification_settings'/);
+  assert.match(script, /\.rpc\('get_my_notification_settings_v2'/);
+  assert.match(script, /\.rpc\('update_my_notification_settings_v2'/);
   assert.match(script, /\.rpc\('save_my_push_subscription'/);
   assert.match(script, /\.rpc\('disable_my_push_subscription'/);
   assert.match(script, /functions\.invoke\('push-notifications'/);
@@ -98,7 +99,7 @@ test('내 정보 화면은 사용자별 푸시 알림 종류 설정을 제공한
   assert.doesNotMatch(script, /\.from\('push_subscriptions'\)/);
 });
 
-test('푸시 Edge Function은 비밀 VAPID 키와 로그인 사용자 본인 구독으로만 시험 발송한다', async () => {
+test('푸시 Edge Function은 사용자 요청과 예약 자동화 요청을 각각 서버에서 검증한다', async () => {
   const [source, denoConfig, guide] = await Promise.all([
     readProjectFile('supabase/functions/push-notifications/index.ts'),
     readProjectFile('supabase/functions/push-notifications/deno.json'),
@@ -117,13 +118,23 @@ test('푸시 Edge Function은 비밀 VAPID 키와 로그인 사용자 본인 구
   assert.match(source, /Deno\.env\.get\('VAPID_PRIVATE_KEY'\)/);
   assert.match(source, /webPush\.setVapidDetails/);
   assert.match(source, /webPush\.sendNotification/);
+  assert.match(source, /body\.action === 'process-reminders'/);
+  assert.match(source, /x-push-automation-secret/);
+  assert.match(source, /claim_due_event_reminders/);
+  assert.match(source, /complete_event_reminder/);
+  assert.match(source, /fail_event_reminder/);
+  assert.match(source, /body\.action === 'event-message'/);
+  assert.match(source, /create_manual_event_push_message/);
+  assert.match(source, /'event_reminder'/);
+  assert.match(source, /'admin_event_message'/);
   assert.match(source, /statusCode === 404 \|\| statusCode === 410/);
   assert.match(source, /\.update\(\{ is_active: false/);
   assert.doesNotMatch(source, /console\.(log|info|debug)/);
   assert.match(guide, /supabase@2\.111\.0 secrets set/);
   assert.match(guide, /functions deploy push-notifications/);
   assert.match(guide, /--use-api/);
-  assert.match(guide, /--no-verify-jwt.*사용하지 않습니다/);
+  assert.match(guide, /--no-verify-jwt/);
+  assert.match(guide, /사용자 JWT를 직접 검증/);
 });
 
 test('푸시 구독 마이그레이션은 비공개 저장, 본인·회원 검증과 탈퇴 비활성화를 강제한다', async () => {
@@ -150,6 +161,34 @@ test('푸시 구독 마이그레이션은 비공개 저장, 본인·회원 검�
   assert.match(migration, /old\.status = 'active' and new\.status <> 'active'/);
   assert.match(migration, /grant execute on function public\.get_my_notification_settings\(uuid\)/);
   assert.doesNotMatch(migration, /grant (select|insert|update|delete) on table public\.push_subscriptions/i);
+});
+
+test('일정 푸시 마이그레이션은 관리자 권한, 오늘 일정, 예약 잠금과 Vault Cron을 강제한다', async () => {
+  const migration = await readProjectFile(
+    'supabase/migrations/202608050014_add_event_push_notifications.sql',
+  );
+
+  assert.match(migration, /add column if not exists reminder_at timestamptz/);
+  assert.match(migration, /add column if not exists admin_event_message boolean/);
+  assert.match(migration, /create table if not exists public\.event_push_messages/);
+  assert.match(migration, /alter table public\.event_push_messages enable row level security/);
+  assert.match(migration, /revoke all on table public\.event_push_messages from anon, authenticated/);
+  assert.match(migration, /create or replace function public\.save_event_with_reminder/);
+  assert.match(migration, /create or replace function public\.create_manual_event_push_message/);
+  assert.match(migration, /private\.can_manage_club\(v_event\.club_id, v_user_id\)/);
+  assert.match(migration, /at time zone 'Asia\/Seoul'/);
+  assert.match(migration, /interval '5 minutes'/);
+  assert.match(migration, /create or replace function public\.claim_due_event_reminders/);
+  assert.match(migration, /for update skip locked/);
+  assert.match(migration, /interval '15 minutes'/);
+  assert.match(migration, /create or replace function public\.complete_event_reminder/);
+  assert.match(migration, /create or replace function public\.fail_event_reminder/);
+  assert.match(migration, /vault\.create_secret/);
+  assert.match(migration, /push_automation_secret/);
+  assert.match(migration, /cron\.schedule/);
+  assert.match(migration, /net\.http_post/);
+  assert.match(migration, /'\*\/5 \* \* \* \*'/);
+  assert.doesNotMatch(migration, /grant (select|insert|update|delete) on table public\.event_push_messages/i);
 });
 
 test('개인정보 안내는 푸시 구독 정보와 비활성화 기준을 설명한다', async () => {
@@ -359,16 +398,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.7.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.8.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.7\.0</);
-  assert.match(config, /appVersion: '1\.7\.0'/);
-  assert.match(readme, /`1\.7\.0`/);
+  assert.match(html, /data-app-version>1\.8\.0</);
+  assert.match(config, /appVersion: '1\.8\.0'/);
+  assert.match(readme, /`1\.8\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -380,7 +419,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.7\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.8\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -434,14 +473,34 @@ test('일정 클라이언트는 한국 시간을 변환하고 서버 함수로�
   assert.match(script, /timeZone: 'Asia\/Seoul'/);
   assert.match(script, /new Date\(`\$\{value\}:00\+09:00`\)/);
   assert.match(script, /activeClub\?\.role/);
-  assert.match(script, /create_event/);
-  assert.match(script, /update_event/);
+  assert.match(script, /save_event_with_reminder/);
   assert.match(script, /publish_event/);
   assert.match(script, /cancel_event/);
   assert.match(script, /\.from\('events'\)/);
   assert.doesNotMatch(script, /\.from\('events'\)\s*\.insert/);
   assert.doesNotMatch(script, /\.from\('events'\)\s*\.update/);
   assert.doesNotMatch(script, /\.from\('events'\)\s*\.delete/);
+});
+
+test('일정 화면은 예약 알림과 오늘 참가 확정자 관리자 알림을 제공한다', async () => {
+  const [html, css, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/styles.css'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-event-detail-reminder/);
+  assert.match(html, /name="reminderPreset"/);
+  assert.match(html, /value="day-before-20"/);
+  assert.match(html, /name="reminderAt" type="datetime-local"/);
+  assert.match(html, /data-event-push-panel/);
+  assert.match(html, /data-event-push-form/);
+  assert.match(html, /data-event-push-recipient-count/);
+  assert.match(css, /\.event-push-panel/);
+  assert.match(script, /function syncEventReminderInput\(\)/);
+  assert.match(script, /koreanDateKey\(scheduleEvent\.starts_at\) === currentKoreanDate\(\)/);
+  assert.match(script, /action: 'event-message'/);
+  assert.match(script, /confirmedCount/);
 });
 
 test('일정 마이그레이션은 역할, 상태, 시간과 직접 쓰기 권한을 서버에서 강제한다', async () => {

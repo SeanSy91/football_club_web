@@ -18,7 +18,7 @@
     <meta property="og:url" content="https://seansy91.github.io/football_club_web/" />
     <meta
       property="og:image"
-      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.7.0"
+      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.8.0"
     />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1179" />
@@ -32,7 +32,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.7.0"
+      content="https://seansy91.github.io/football_club_web/Main_image.png?v=1.8.0"
     />
     <meta name="theme-color" content="#12372a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -77,7 +77,7 @@
       <section class="view home-view" data-view="home" aria-labelledby="home-title">
         <div class="hero-shell">
           <div class="hero-copy">
-            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>1.7.0</span></p>
+            <p class="eyebrow">KFC MEMBER WEB · VERSION <span data-app-version>1.8.0</span></p>
             <h1 id="home-title">우리 팀의 약속을<br />더 가볍고 선명하게.</h1>
             <p class="hero-description">
               일정 확인부터 참가 신청, 대기 순번과 출석 기록까지 한곳에서
@@ -341,6 +341,7 @@
               <div><dt>정원</dt><dd data-event-detail-capacity>—</dd></div>
               <div><dt>신청 마감</dt><dd data-event-detail-registration>—</dd></div>
               <div><dt>취소 마감</dt><dd data-event-detail-cancellation>—</dd></div>
+              <div><dt>참가자 알림</dt><dd data-event-detail-reminder>알림 없음</dd></div>
             </dl>
             <div class="event-description">
               <h3>상세 안내</h3>
@@ -350,6 +351,30 @@
               <strong>취소된 일정입니다</strong>
               <p data-event-cancellation-reason></p>
             </aside>
+
+            <section class="event-push-panel" data-event-push-panel hidden aria-labelledby="event-push-title">
+              <div class="event-push-heading">
+                <div>
+                  <p class="eyebrow">TODAY'S PUSH</p>
+                  <h3 id="event-push-title">오늘 참석자에게 알림</h3>
+                  <p>현재 참가 확정자 <strong data-event-push-recipient-count>0명</strong>의 알림 기기로 전송합니다.</p>
+                </div>
+                <span>관리자 전용</span>
+              </div>
+              <form data-event-push-form>
+                <label class="form-field">
+                  <span>알림 제목 *</span>
+                  <input name="pushTitle" type="text" required minlength="2" maxlength="60" />
+                </label>
+                <label class="form-field form-field-wide">
+                  <span>알림 내용 *</span>
+                  <textarea name="pushBody" required minlength="2" maxlength="300" rows="3" placeholder="집합 장소, 준비물 등 참석자에게 알릴 내용을 입력해 주세요."></textarea>
+                  <small>5분에 한 번만 보낼 수 있습니다.</small>
+                </label>
+                <p class="form-status" role="status" aria-live="polite" data-event-push-status></p>
+                <button class="save-button" type="submit" data-event-push-send>참석자에게 알림 보내기</button>
+              </form>
+            </section>
 
             <section class="participation-section" data-event-participation hidden aria-labelledby="participation-title">
               <div class="participation-heading">
@@ -431,6 +456,21 @@
               <label class="form-field">
                 <span>정원 *</span>
                 <input name="capacity" type="number" required min="1" max="100" inputmode="numeric" value="18" />
+              </label>
+              <label class="form-field">
+                <span>참가 확정자 예약 알림</span>
+                <select name="reminderPreset">
+                  <option value="none">보내지 않음</option>
+                  <option value="60">경기 1시간 전</option>
+                  <option value="120" selected>경기 2시간 전</option>
+                  <option value="day-before-20">전날 오후 8시</option>
+                  <option value="custom">직접 지정</option>
+                </select>
+              </label>
+              <label class="form-field" data-reminder-custom-field hidden>
+                <span>알림 시각</span>
+                <input name="reminderAt" type="datetime-local" step="60" />
+                <small>공개된 일정의 참가 확정자에게만 전송합니다.</small>
               </label>
               <label class="form-field form-field-wide">
                 <span>상세 안내</span>
@@ -796,6 +836,10 @@
                   <label class="notification-option">
                     <input name="eventReminder" type="checkbox" />
                     <span><strong>일정 알림</strong><small>참가 확정 일정이 가까워졌을 때</small></span>
+                  </label>
+                  <label class="notification-option">
+                    <input name="adminEventMessage" type="checkbox" />
+                    <span><strong>관리자 경기 안내</strong><small>관리자가 오늘 참석자에게 안내를 보낼 때</small></span>
                   </label>
                 </div>
               </fieldset>

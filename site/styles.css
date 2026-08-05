@@ -1302,6 +1302,63 @@ button {
   margin: 8px 0 0;
 }
 
+.event-push-panel {
+  margin-top: 34px;
+  padding: 26px;
+  background: #f1f8dd;
+  border: 1px solid rgba(42, 82, 59, 0.2);
+  border-radius: var(--radius-medium);
+}
+
+.event-push-heading {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.event-push-heading .eyebrow {
+  margin-bottom: 6px;
+}
+
+.event-push-heading h3,
+.event-push-heading p {
+  margin: 0;
+}
+
+.event-push-heading p:not(.eyebrow) {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.event-push-heading > span {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 900;
+  background: white;
+  border-radius: 999px;
+}
+
+.event-push-panel form {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: end;
+  margin-top: 20px;
+}
+
+.event-push-panel .form-status,
+.event-push-panel .save-button {
+  grid-column: 1 / -1;
+}
+
+.event-push-panel .save-button {
+  justify-self: end;
+}
+
 .participation-section {
   margin-top: 42px;
   padding-top: 38px;
@@ -2704,6 +2761,21 @@ button {
 
   .notification-actions button {
     width: 100%;
+  }
+
+  .event-push-panel {
+    padding: 22px 18px;
+  }
+
+  .event-push-heading,
+  .event-push-panel form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .event-push-panel .save-button {
+    width: 100%;
+    justify-self: stretch;
   }
 
   .account-panel .danger-button {

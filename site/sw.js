@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kfc-football-shell-v1.7.0';
+const CACHE_NAME = 'kfc-football-shell-v1.8.0';
 const APP_SHELL = [
   './',
   './index.html',
