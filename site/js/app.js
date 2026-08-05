@@ -38,6 +38,8 @@
   const notificationSaveButton = document.querySelector('[data-notification-save]');
   const notificationDeviceStatus = document.querySelector('[data-notification-device-status]');
   const enablePushButton = document.querySelector('[data-enable-push]');
+  const testPushButton = document.querySelector('[data-test-push]');
+  const disablePushButton = document.querySelector('[data-disable-push]');
   const clubLoading = document.querySelector('[data-club-loading]');
   const clubOnboarding = document.querySelector('[data-club-onboarding]');
   const clubDashboard = document.querySelector('[data-club-dashboard]');
@@ -119,6 +121,7 @@
   let memberDirectoryLoadId = 0;
   let toastTimer;
   let deferredInstallPrompt = null;
+  let currentPushSubscription = null;
 
   const hasSupabaseConfig = Boolean(
     config?.supabaseUrl && config?.supabasePublishableKey && window.supabase?.createClient,
@@ -333,24 +336,180 @@
     notificationForm.reset();
     notificationFieldset.disabled = true;
     notificationSaveButton.disabled = true;
+    currentPushSubscription = null;
+    enablePushButton.hidden = false;
     enablePushButton.disabled = true;
+    testPushButton.hidden = true;
+    disablePushButton.hidden = true;
     notificationDeviceStatus.textContent = '클럽 가입 후 설정할 수 있습니다.';
     notificationDeviceStatus.classList.remove('is-error');
     setNotificationStatus('');
   }
 
-  function updateNotificationDeviceStatus(activeSubscriptionCount) {
-    const supportsPush = 'serviceWorker' in navigator
+  function supportsWebPush() {
+    return 'serviceWorker' in navigator
       && 'PushManager' in window
       && 'Notification' in window;
-    notificationDeviceStatus.classList.toggle('is-error', !supportsPush);
-    if (!supportsPush) {
+  }
+
+  function isIosDevice() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+
+  async function refreshPushControls(activeSubscriptionCount = 0) {
+    currentPushSubscription = null;
+    enablePushButton.hidden = false;
+    enablePushButton.disabled = true;
+    testPushButton.hidden = true;
+    disablePushButton.hidden = true;
+    notificationDeviceStatus.classList.remove('is-error');
+
+    if (!supportsWebPush()) {
       notificationDeviceStatus.textContent = '이 브라우저는 푸시 알림을 지원하지 않습니다.';
+      notificationDeviceStatus.classList.add('is-error');
       return;
     }
+    if (isIosDevice() && !isStandaloneApp()) {
+      notificationDeviceStatus.textContent = 'iPhone은 홈 화면에 설치한 뒤 알림을 켤 수 있습니다.';
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      notificationDeviceStatus.textContent = '브라우저 설정에서 알림 차단을 해제해 주세요.';
+      notificationDeviceStatus.classList.add('is-error');
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      currentPushSubscription = await registration.pushManager.getSubscription();
+    } catch {
+      notificationDeviceStatus.textContent = '서비스 워커의 알림 상태를 확인하지 못했습니다.';
+      notificationDeviceStatus.classList.add('is-error');
+      return;
+    }
+
+    if (currentPushSubscription) {
+      enablePushButton.hidden = true;
+      testPushButton.hidden = false;
+      disablePushButton.hidden = false;
+      notificationDeviceStatus.textContent = activeSubscriptionCount > 1
+        ? `이 기기 알림 켜짐 · 연결된 기기 ${activeSubscriptionCount}개`
+        : '이 기기 알림 켜짐';
+      return;
+    }
+
+    enablePushButton.disabled = !activeClub;
     notificationDeviceStatus.textContent = activeSubscriptionCount > 0
-      ? `연결된 알림 기기 ${activeSubscriptionCount}개`
-      : '기기 알림 연결 준비 중';
+      ? `다른 기기 ${activeSubscriptionCount}개 연결됨 · 이 기기는 꺼짐`
+      : '이 기기 알림을 켤 수 있습니다.';
+  }
+
+  function urlBase64ToUint8Array(value) {
+    const padding = '='.repeat((4 - (value.length % 4)) % 4);
+    const base64 = (value + padding).replaceAll('-', '+').replaceAll('_', '/');
+    const raw = window.atob(base64);
+    return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+  }
+
+  async function invokePushFunction(body) {
+    const { data, error } = await supabaseClient.functions.invoke('push-notifications', { body });
+    if (error) throw new Error(data?.message || error.message);
+    return data;
+  }
+
+  async function sendTestPush() {
+    if (!activeClub || !currentPushSubscription) return;
+    testPushButton.disabled = true;
+    setNotificationStatus('시험 알림을 전송하고 있습니다.');
+    try {
+      const result = await invokePushFunction({ action: 'test', clubId: activeClub.club_id });
+      setNotificationStatus(`시험 알림을 ${result.sentCount}개 기기로 전송했습니다.`);
+    } catch (error) {
+      setNotificationStatus(`시험 알림을 보내지 못했습니다: ${error.message}`, true);
+    } finally {
+      testPushButton.disabled = false;
+    }
+  }
+
+  async function enablePushNotifications() {
+    if (!activeClub || !supportsWebPush()) return;
+    enablePushButton.disabled = true;
+    setNotificationStatus('브라우저 알림 권한을 확인하고 있습니다.');
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('알림 권한이 허용되지 않았습니다.');
+      }
+      const keyResult = await invokePushFunction({ action: 'public-key' });
+      if (!keyResult?.publicKey) throw new Error('푸시 공개 키를 받지 못했습니다.');
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyResult.publicKey),
+      });
+      const serialized = subscription.toJSON();
+      if (!serialized.endpoint || !serialized.keys?.p256dh || !serialized.keys?.auth) {
+        await subscription.unsubscribe();
+        throw new Error('브라우저 구독 정보를 만들지 못했습니다.');
+      }
+
+      const { error } = await supabaseClient.rpc('save_my_push_subscription', {
+        p_club_id: activeClub.club_id,
+        p_endpoint: serialized.endpoint,
+        p_p256dh: serialized.keys.p256dh,
+        p_auth_key: serialized.keys.auth,
+        p_expiration_time: serialized.expirationTime,
+        p_user_agent: navigator.userAgent.slice(0, 300),
+      });
+      if (error) {
+        await subscription.unsubscribe();
+        throw error;
+      }
+
+      currentPushSubscription = subscription;
+      await refreshPushControls(1);
+      setNotificationStatus('이 기기의 푸시 알림을 켰습니다.');
+      await sendTestPush();
+    } catch (error) {
+      setNotificationStatus(`알림을 켜지 못했습니다: ${error.message}`, true);
+      await refreshPushControls();
+    }
+  }
+
+  async function disablePushNotifications() {
+    if (!currentPushSubscription) return;
+    const serialized = currentPushSubscription.toJSON();
+    if (!serialized.endpoint) return;
+    disablePushButton.disabled = true;
+    setNotificationStatus('이 기기의 알림을 끄고 있습니다.');
+    const { error } = await supabaseClient.rpc('disable_my_push_subscription', {
+      p_endpoint: serialized.endpoint,
+    });
+    if (error) {
+      disablePushButton.disabled = false;
+      setNotificationStatus(`알림을 끄지 못했습니다: ${error.message}`, true);
+      return;
+    }
+
+    await currentPushSubscription.unsubscribe();
+    currentPushSubscription = null;
+    await refreshPushControls();
+    setNotificationStatus('이 기기의 푸시 알림을 껐습니다.');
+  }
+
+  async function disablePushBeforeSignOut() {
+    if (!currentPushSubscription) return;
+    const endpoint = currentPushSubscription.toJSON().endpoint;
+    if (!endpoint) return;
+    try {
+      await supabaseClient.rpc('disable_my_push_subscription', { p_endpoint: endpoint });
+      await currentPushSubscription.unsubscribe();
+    } catch {
+      showToast('로그아웃 후 이 기기에서 알림이 계속 보이면 브라우저 알림을 차단해 주세요.');
+    } finally {
+      currentPushSubscription = null;
+    }
   }
 
   function fillNotificationSettings(settings) {
@@ -387,7 +546,7 @@
     fillNotificationSettings(data);
     notificationFieldset.disabled = false;
     notificationSaveButton.disabled = false;
-    updateNotificationDeviceStatus(data.active_subscription_count);
+    await refreshPushControls(data.active_subscription_count);
     setNotificationStatus('알림 종류를 선택한 뒤 저장할 수 있습니다.');
   }
 
@@ -2555,6 +2714,7 @@
     }
 
     authActionButton.disabled = true;
+    await disablePushBeforeSignOut();
     const { error } = await supabaseClient.auth.signOut();
     authActionButton.disabled = false;
     if (error) {
@@ -2566,7 +2726,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.6.0';
+    element.textContent = config?.appVersion || '1.7.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2578,6 +2738,9 @@
   profilePhotoRemoveButton?.addEventListener('click', useDefaultProfileAvatar);
   profileForm?.addEventListener('submit', saveProfile);
   notificationForm?.addEventListener('submit', saveNotificationSettings);
+  enablePushButton?.addEventListener('click', enablePushNotifications);
+  testPushButton?.addEventListener('click', sendTestPush);
+  disablePushButton?.addEventListener('click', disablePushNotifications);
   requestAccountDeletionButton?.addEventListener('click', requestAccountDeletion);
   profileBioInput?.addEventListener('input', () => {
     profileBioCount.textContent = profileBioInput.value.length;

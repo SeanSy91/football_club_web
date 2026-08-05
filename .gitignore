@@ -4,3 +4,4 @@ Thumbs.db
 .env.*
 site/js/config.local.js
 backups/
+supabase/.temp/

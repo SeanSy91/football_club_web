@@ -15,7 +15,7 @@
 
 ## 현재 버전
 
-`1.6.0` — 사용자별 푸시 알림 종류 설정과 안전한 기기 구독 저장 기반
+`1.7.0` — PWA 푸시 구독, 시험 알림과 Supabase Edge Function 발송 지원
 
 ## 로컬 실행
 
@@ -58,5 +58,6 @@ OAuth 비밀값은 Supabase 대시보드에서만 관리합니다.
 - [기술 구조와 보안](docs/architecture.md)
 - [단계별 개발 계획](docs/development-plan.md)
 - [Supabase 개발 환경 설정](docs/supabase-setup.md)
+- [푸시 알림 배포와 운영](docs/push-notifications.md)
 
 기존 Flutter/Firebase 프로토타입은 별도 저장소 `football_club_app`의 `v0.4.0` 태그로 보존합니다.

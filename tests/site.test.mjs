@@ -54,6 +54,10 @@ test('사이트는 홈 화면 설치가 가능한 PWA 기반과 필수 규격 �
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === 'navigate'/);
   assert.match(serviceWorker, /caches\.match\('\.\/index\.html'\)/);
+  assert.match(serviceWorker, /addEventListener\('push'/);
+  assert.match(serviceWorker, /registration\.showNotification/);
+  assert.match(serviceWorker, /addEventListener\('notificationclick'/);
+  assert.match(serviceWorker, /clients\.openWindow/);
   assert.match(script, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
   assert.match(script, /beforeinstallprompt/);
   assert.match(script, /appinstalled/);
@@ -69,6 +73,9 @@ test('내 정보 화면은 사용자별 푸시 알림 종류 설정을 제공한
 
   assert.match(html, /data-notification-form/);
   assert.match(html, /data-notification-device-status/);
+  assert.match(html, /data-enable-push/);
+  assert.match(html, /data-test-push hidden/);
+  assert.match(html, /data-disable-push hidden/);
   assert.match(html, /name="eventCreated" type="checkbox"/);
   assert.match(html, /name="eventUpdated" type="checkbox"/);
   assert.match(html, /name="eventCancelled" type="checkbox"/);
@@ -80,9 +87,43 @@ test('내 정보 화면은 사용자별 푸시 알림 종류 설정을 제공한
   assert.match(css, /\.notification-fieldset:disabled/);
   assert.match(script, /\.rpc\('get_my_notification_settings'/);
   assert.match(script, /\.rpc\('update_my_notification_settings'/);
+  assert.match(script, /\.rpc\('save_my_push_subscription'/);
+  assert.match(script, /\.rpc\('disable_my_push_subscription'/);
+  assert.match(script, /functions\.invoke\('push-notifications'/);
+  assert.match(script, /Notification\.requestPermission\(\)/);
+  assert.match(script, /registration\.pushManager\.subscribe/);
+  assert.match(script, /applicationServerKey: urlBase64ToUint8Array/);
   assert.match(script, /'PushManager' in window/);
   assert.doesNotMatch(script, /\.from\('notification_preferences'\)/);
   assert.doesNotMatch(script, /\.from\('push_subscriptions'\)/);
+});
+
+test('푸시 Edge Function은 비밀 VAPID 키와 로그인 사용자 본인 구독으로만 시험 발송한다', async () => {
+  const [source, denoConfig, guide] = await Promise.all([
+    readProjectFile('supabase/functions/push-notifications/index.ts'),
+    readProjectFile('supabase/functions/push-notifications/deno.json'),
+    readProjectFile('docs/push-notifications.md'),
+  ]);
+  const dependencies = JSON.parse(denoConfig).imports;
+
+  assert.equal(dependencies['@supabase/supabase-js'], 'npm:@supabase/supabase-js@2.112.0');
+  assert.equal(dependencies['web-push'], 'npm:web-push@3.6.7');
+  assert.match(source, /allowedOrigins = new Set/);
+  assert.match(source, /https:\/\/seansy91\.github\.io/);
+  assert.match(source, /userClient\.auth\.getUser\(\)/);
+  assert.match(source, /\.eq\('user_id', userData\.user\.id\)/);
+  assert.match(source, /\.eq\('status', 'active'\)/);
+  assert.match(source, /Deno\.env\.get\('VAPID_PUBLIC_KEY'\)/);
+  assert.match(source, /Deno\.env\.get\('VAPID_PRIVATE_KEY'\)/);
+  assert.match(source, /webPush\.setVapidDetails/);
+  assert.match(source, /webPush\.sendNotification/);
+  assert.match(source, /statusCode === 404 \|\| statusCode === 410/);
+  assert.match(source, /\.update\(\{ is_active: false/);
+  assert.doesNotMatch(source, /console\.(log|info|debug)/);
+  assert.match(guide, /supabase@2\.111\.0 secrets set/);
+  assert.match(guide, /functions deploy push-notifications/);
+  assert.match(guide, /--use-api/);
+  assert.match(guide, /--no-verify-jwt.*사용하지 않습니다/);
 });
 
 test('푸시 구독 마이그레이션은 비공개 저장, 본인·회원 검증과 탈퇴 비활성화를 강제한다', async () => {
@@ -318,16 +359,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.6.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.7.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.6\.0</);
-  assert.match(config, /appVersion: '1\.6\.0'/);
-  assert.match(readme, /`1\.6\.0`/);
+  assert.match(html, /data-app-version>1\.7\.0</);
+  assert.match(config, /appVersion: '1\.7\.0'/);
+  assert.match(readme, /`1\.7\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -339,7 +380,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.6\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.7\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
