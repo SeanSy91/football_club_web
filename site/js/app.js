@@ -16,6 +16,9 @@
   const googleLoginButton = document.querySelector('[data-google-login]');
   const authActionButton = document.querySelector('[data-auth-action]');
   const primaryAuthAction = document.querySelector('[data-primary-auth-action]');
+  const pwaInstallCard = document.querySelector('[data-pwa-install]');
+  const pwaInstallMessage = document.querySelector('[data-pwa-install-message]');
+  const installAppButton = document.querySelector('[data-install-app]');
   const statusDot = document.querySelector('.status-dot');
   const connectionStatus = document.querySelector('[data-connection-status]');
   const profileForm = document.querySelector('[data-profile-form]');
@@ -109,6 +112,7 @@
   let selectedEventId = '';
   let memberDirectoryLoadId = 0;
   let toastTimer;
+  let deferredInstallPrompt = null;
 
   const hasSupabaseConfig = Boolean(
     config?.supabaseUrl && config?.supabasePublishableKey && window.supabase?.createClient,
@@ -174,6 +178,54 @@
     toastTimer = window.setTimeout(() => {
       toast.hidden = true;
     }, 4200);
+  }
+
+  function isStandaloneApp() {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+  }
+
+  function initializePwa() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch((error) => {
+        console.warn('서비스 워커를 등록하지 못했습니다.', error);
+      });
+    }
+
+    if (isStandaloneApp()) {
+      pwaInstallCard.hidden = true;
+      return;
+    }
+
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIos) {
+      pwaInstallMessage.textContent =
+        'Safari의 공유 버튼을 누른 뒤 홈 화면에 추가를 선택해 주세요. 설치 후 웹 푸시 알림을 사용할 수 있습니다.';
+    }
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      installAppButton.hidden = false;
+      pwaInstallMessage.textContent =
+        '설치하면 홈 화면에서 앱처럼 빠르게 열고 웹 푸시 알림을 받을 수 있습니다.';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      pwaInstallCard.hidden = true;
+      showToast('KFC Football Club을 홈 화면에 설치했습니다.');
+    });
+  }
+
+  async function installPwa() {
+    if (!deferredInstallPrompt) return;
+    installAppButton.disabled = true;
+    await deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installAppButton.hidden = true;
+    installAppButton.disabled = false;
   }
 
   function setConnectionState(state, message) {
@@ -2410,10 +2462,11 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.4.0';
+    element.textContent = config?.appVersion || '1.5.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
+  installAppButton?.addEventListener('click', installPwa);
   authActionButton?.addEventListener('click', handleAuthAction);
   profileEditButton?.addEventListener('click', openProfileForm);
   profileCancelButton?.addEventListener('click', closeProfileForm);
@@ -2513,6 +2566,7 @@
   window.addEventListener('hashchange', renderRoute);
 
   refreshGeneratedInviteCode();
+  initializePwa();
 
   if (!window.location.hash) {
     window.history.replaceState(null, '', '#home');

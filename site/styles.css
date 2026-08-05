@@ -382,6 +382,43 @@ button {
   font-size: 11px;
 }
 
+.pwa-install-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  margin-top: 54px;
+  padding: 22px 24px;
+  background: rgba(255, 253, 247, 0.78);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  box-shadow: 0 14px 34px rgba(27, 48, 38, 0.05);
+}
+
+.pwa-install-card img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 18px;
+}
+
+.pwa-install-card h2 {
+  margin: 7px 0 6px;
+  font-size: 20px;
+  letter-spacing: -0.04em;
+}
+
+.pwa-install-card p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.pwa-install-card .save-button {
+  white-space: nowrap;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2354,6 +2391,15 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .pwa-install-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .pwa-install-card .save-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
   .attendance-row {
     grid-template-columns: 1fr 1fr;
   }
@@ -2510,6 +2556,11 @@ button {
 @media (max-width: 480px) {
   .profile-preview {
     flex-direction: column;
+  }
+
+  .pwa-install-card {
+    grid-template-columns: 1fr;
+    padding: 22px;
   }
 
   .account-panel {

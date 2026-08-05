@@ -21,6 +21,45 @@ test('정적 사이트의 필수 파일과 접근성 구조가 존재한다', as
   assert.match(script, /hashchange/);
 });
 
+test('사이트는 홈 화면 설치가 가능한 PWA 기반과 필수 규격 앱 아이콘을 제공한다', async () => {
+  const [html, manifestSource, serviceWorker, script, icon180, icon192, icon512] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/manifest.webmanifest'),
+    readProjectFile('site/sw.js'),
+    readProjectFile('site/js/app.js'),
+    readFile(new URL('../site/icons/kfc-app-icon-180.png', import.meta.url)),
+    readFile(new URL('../site/icons/kfc-app-icon-192.png', import.meta.url)),
+    readFile(new URL('../site/icons/kfc-app-icon-512.png', import.meta.url)),
+  ]);
+  const manifest = JSON.parse(manifestSource);
+
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/icons\/kfc-app-icon-180\.png"/);
+  assert.match(html, /apple-mobile-web-app-capable/);
+  assert.match(html, /data-pwa-install/);
+  assert.match(html, /data-install-app hidden/);
+  assert.equal(manifest.name, 'KFC Football Club App');
+  assert.equal(manifest.id, './');
+  assert.equal(manifest.start_url, './#home');
+  assert.equal(manifest.scope, './');
+  assert.equal(manifest.display, 'standalone');
+  assert.equal(manifest.icons[0].sizes, '192x192');
+  assert.equal(manifest.icons[1].sizes, '512x512');
+  assert.equal(manifest.icons[2].purpose, 'maskable');
+  [[icon180, 180], [icon192, 192], [icon512, 512]].forEach(([icon, size]) => {
+    assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG');
+    assert.equal(icon.readUInt32BE(16), size);
+    assert.equal(icon.readUInt32BE(20), size);
+  });
+  assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
+  assert.match(serviceWorker, /request\.mode === 'navigate'/);
+  assert.match(serviceWorker, /caches\.match\('\.\/index\.html'\)/);
+  assert.match(script, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
+  assert.match(script, /beforeinstallprompt/);
+  assert.match(script, /appinstalled/);
+  assert.match(script, /홈 화면에 추가/);
+});
+
 test('프레임워크와 비밀 서버 키를 정적 사이트에 포함하지 않는다', async () => {
   const [html, config, script] = await Promise.all([
     readProjectFile('site/index.html'),
@@ -220,16 +259,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.4.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.5.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.4\.0</);
-  assert.match(config, /appVersion: '1\.4\.0'/);
-  assert.match(readme, /`1\.4\.0`/);
+  assert.match(html, /data-app-version>1\.5\.0</);
+  assert.match(config, /appVersion: '1\.5\.0'/);
+  assert.match(readme, /`1\.5\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -241,7 +280,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.4\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.5\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
