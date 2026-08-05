@@ -220,16 +220,16 @@ test('회원 관리 마이그레이션은 owner 권한, 역할 경계와 감사 
   assert.doesNotMatch(migration, /grant (insert|update|delete) on table public\.audit_logs/i);
 });
 
-test('v1.3.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
+test('v1.4.0 공개 버전 표기가 사이트와 문서에서 일치한다', async () => {
   const [html, config, readme] = await Promise.all([
     readProjectFile('site/index.html'),
     readProjectFile('site/js/config.js'),
     readProjectFile('README.md'),
   ]);
 
-  assert.match(html, /data-app-version>1\.3\.0</);
-  assert.match(config, /appVersion: '1\.3\.0'/);
-  assert.match(readme, /`1\.3\.0`/);
+  assert.match(html, /data-app-version>1\.4\.0</);
+  assert.match(config, /appVersion: '1\.4\.0'/);
+  assert.match(readme, /`1\.4\.0`/);
 });
 
 test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를 제공한다', async () => {
@@ -241,7 +241,7 @@ test('소셜 링크 미리보기는 공개 절대 URL과 KFC 대표 이미지를
   assert.match(html, /property="og:title" content="KFC Football Club"/);
   assert.match(html, /property="og:description"/);
   assert.match(html, /property="og:url" content="https:\/\/seansy91\.github\.io\/football_club_web\/"/);
-  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.3\.0/);
+  assert.match(html, /property="og:image"[\s\S]+Main_image\.png\?v=1\.4\.0/);
   assert.match(html, /property="og:image:width" content="1179"/);
   assert.match(html, /property="og:image:height" content="1171"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
@@ -503,6 +503,22 @@ test('관리자 전용 출석 탭은 월별 회원 집계와 권한 제한을 �
   assert.match(migration, /when ar\.status = 'absent' then 'no_show'/);
   assert.match(migration, /when er\.status in \('waiting', 'cancelled'\) then 'excluded'/);
   assert.match(migration, /grant execute on function public\.get_admin_monthly_attendance\(uuid, date\)/);
+});
+
+test('관리자는 현재 월별 집계를 한글 Excel 호환 CSV로 안전하게 저장한다', async () => {
+  const [html, script] = await Promise.all([
+    readProjectFile('site/index.html'),
+    readProjectFile('site/js/app.js'),
+  ]);
+
+  assert.match(html, /data-export-attendance-csv disabled/);
+  assert.match(script, /function csvCell\(value\)/);
+  assert.match(script, /\/\^\[=\+\\-@\\t\\r\]\//);
+  assert.match(script, /new Blob\(\['\\uFEFF', csv\]/);
+  assert.match(script, /type: 'text\/csv;charset=utf-8'/);
+  assert.match(script, /KFC_월별_출석현황_\$\{adminAttendanceDataMonth\}\.csv/);
+  assert.match(script, /URL\.createObjectURL\(blob\)/);
+  assert.match(script, /exportAttendanceCsvButton\?\.addEventListener\('click'/);
 });
 
 test('공지 화면은 목록, 오류 복구와 접근 가능한 관리 폼을 제공한다', async () => {

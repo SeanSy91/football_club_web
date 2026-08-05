@@ -1628,6 +1628,14 @@ button {
   line-height: 1.7;
 }
 
+.admin-attendance-workspace .member-section-heading {
+  gap: 18px;
+}
+
+.admin-attendance-workspace .member-section-heading .save-button {
+  flex: 0 0 auto;
+}
+
 .admin-attendance-table-wrap {
   margin-top: 20px;
   overflow-x: auto;
@@ -2535,6 +2543,15 @@ button {
     border-right: 0;
     border-left: 0;
     border-radius: 0;
+  }
+
+  .admin-attendance-workspace .member-section-heading {
+    display: grid;
+    align-items: start;
+  }
+
+  .admin-attendance-workspace .member-section-heading .save-button {
+    width: 100%;
   }
 
   .schedule-heading,

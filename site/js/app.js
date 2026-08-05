@@ -77,6 +77,7 @@
   const adminAttendanceError = document.querySelector('[data-admin-attendance-error]');
   const adminAttendanceStatus = document.querySelector('[data-admin-attendance-status]');
   const adminAttendanceRows = document.querySelector('[data-admin-attendance-rows]');
+  const exportAttendanceCsvButton = document.querySelector('[data-export-attendance-csv]');
   const announcementLoading = document.querySelector('[data-announcement-loading]');
   const announcementNoClub = document.querySelector('[data-announcement-no-club]');
   const announcementWorkspace = document.querySelector('[data-announcement-workspace]');
@@ -102,6 +103,8 @@
   let selectedScheduleDate = '';
   let eventResponses = [];
   let attendanceEvents = [];
+  let adminAttendanceData = [];
+  let adminAttendanceDataMonth = '';
   let announcements = [];
   let selectedEventId = '';
   let memberDirectoryLoadId = 0;
@@ -1888,12 +1891,15 @@
 
   function resetAdminAttendance() {
     updateManagerNavigation(null);
+    adminAttendanceData = [];
+    adminAttendanceDataMonth = '';
     adminAttendanceLoading.hidden = false;
     adminAttendanceUnauthorized.hidden = true;
     adminAttendanceWorkspace.hidden = true;
     adminAttendanceError.hidden = true;
     adminAttendanceStatus.textContent = '';
     adminAttendanceRows.replaceChildren();
+    exportAttendanceCsvButton.disabled = true;
   }
 
   function showAdminAttendanceUnauthorized() {
@@ -1953,6 +1959,7 @@
     adminAttendanceStatus.textContent = rows.length
       ? `활성 회원 ${rows.length}명의 월별 집계입니다.`
       : '집계할 활성 회원이 없습니다.';
+    exportAttendanceCsvButton.disabled = rows.length === 0;
   }
 
   async function loadAdminAttendance(membership = activeClub) {
@@ -1966,6 +1973,7 @@
     adminAttendanceWorkspace.hidden = true;
     adminAttendanceError.hidden = true;
     adminAttendanceStatus.textContent = '';
+    exportAttendanceCsvButton.disabled = true;
 
     const { data, error } = await supabaseClient.rpc('get_admin_monthly_attendance', {
       p_club_id: membership.club_id,
@@ -1976,9 +1984,46 @@
       return;
     }
 
-    renderAdminAttendance(data || []);
+    adminAttendanceData = data || [];
+    adminAttendanceDataMonth = adminAttendanceMonth.value;
+    renderAdminAttendance(adminAttendanceData);
     adminAttendanceLoading.hidden = true;
     adminAttendanceWorkspace.hidden = false;
+  }
+
+  function csvCell(value) {
+    let normalized = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(normalized)) normalized = `'${normalized}`;
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+
+  function exportAdminAttendanceCsv() {
+    if (!canManageSchedule() || !adminAttendanceData.length || !adminAttendanceDataMonth) return;
+    const headers = ['조회 월', '회원명', '권한', '참석', '불참', '지각', '결석', '미처리', '집계 대상 일정'];
+    const rows = adminAttendanceData.map((member) => [
+      adminAttendanceDataMonth,
+      member.display_name,
+      roleLabel(member.member_role),
+      member.attended_count || 0,
+      member.declared_absent_count || 0,
+      member.late_count || 0,
+      member.no_show_count || 0,
+      member.unprocessed_count || 0,
+      member.finalized_event_count || 0,
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\r\n');
+    const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `KFC_월별_출석현황_${adminAttendanceDataMonth}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+    showToast(`${adminAttendanceDataMonth} 출석 현황 CSV를 저장했습니다.`);
   }
 
   function announcementDisplayStatus(announcement) {
@@ -2365,7 +2410,7 @@
   }
 
   document.querySelectorAll('[data-app-version]').forEach((element) => {
-    element.textContent = config?.appVersion || '1.3.0';
+    element.textContent = config?.appVersion || '1.4.0';
   });
 
   googleLoginButton?.addEventListener('click', signInWithGoogle);
@@ -2452,6 +2497,7 @@
   document.querySelector('[data-admin-attendance-retry]')?.addEventListener('click', () => {
     if (activeClub) loadAdminAttendance(activeClub);
   });
+  exportAttendanceCsvButton?.addEventListener('click', exportAdminAttendanceCsv);
   createAnnouncementButton?.addEventListener('click', () => openAnnouncementForm());
   announcementForm?.addEventListener('submit', saveAnnouncement);
   document.querySelector('[data-announcement-form-cancel]')?.addEventListener('click', closeAnnouncementForm);
